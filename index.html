@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#132c2e">
+  <title>闽韵 ·《贬官记》WebAR 实测</title>
+  <style>
+    :root{color-scheme:dark;--ink:#132c2e;--gold:#d3b57a;--paper:#f4efdf;--muted:#bdd0ca}
+    *{box-sizing:border-box}body{margin:0;background:var(--ink);color:var(--paper);font:15px/1.65 system-ui,-apple-system,"PingFang SC",sans-serif}
+    button,input,select{font:inherit}button,a,input,select{-webkit-tap-highlight-color:transparent}
+    button{border:1px solid #d3b57a65;border-radius:12px;padding:10px 15px;background:#244446;color:var(--paper);cursor:pointer;min-height:44px}
+    button:disabled{opacity:.4;cursor:wait}button.primary{background:var(--gold);color:#152c2d;font-weight:700}
+    button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #fff;outline-offset:3px}
+    a{color:#ead099}label{display:block;font-size:13px;color:var(--muted);margin:12px 0 4px}
+    input,select{width:100%;padding:10px;background:#0b2426;border:1px solid #57726c;border-radius:9px;color:var(--paper)}
+    input[type=file]{font-size:12px}small,.small{font-size:12px;color:var(--muted)}
+    #stage{position:fixed;inset:0;overflow:hidden;isolation:isolate;background:transparent}
+    #stage video{z-index:0!important}#stage canvas{z-index:1;pointer-events:none}
+    #touch{position:fixed;inset:0;z-index:2;pointer-events:none;touch-action:none;user-select:none}
+    #touch.enabled{pointer-events:auto}
+    .brand{position:fixed;z-index:4;top:calc(16px + env(safe-area-inset-top));left:18px;max-width:calc(100% - 182px);pointer-events:none;text-shadow:0 2px 10px #000}
+    .brand span{font-size:11px;color:var(--gold);letter-spacing:3px}.brand h1{font:600 clamp(18px,5vw,26px)/1.2 "Noto Serif SC","Songti SC",serif;margin:6px 0}
+    #monitor{position:fixed;right:12px;top:calc(12px + env(safe-area-inset-top));z-index:5;width:158px;padding:10px 12px;border:1px solid #d3b57a55;background:#0a2021e8;backdrop-filter:blur(12px);border-radius:14px;font-size:11px;font-variant-numeric:tabular-nums}
+    #monitor strong{color:var(--gold);letter-spacing:1px}#monitor div{display:flex;justify-content:space-between;gap:5px;margin-top:4px}#monitor b{font-weight:500;color:#fff}
+    #statusBox{position:fixed;bottom:calc(87px + env(safe-area-inset-bottom));left:16px;right:16px;z-index:4;max-width:600px;margin:auto;padding:12px 16px;border:1px solid #d3b57a45;background:#0b2325df;border-radius:14px;pointer-events:none}
+    #status{font-weight:600}#hint{font-size:12px;color:var(--muted)}
+    nav{position:fixed;left:12px;right:12px;bottom:calc(14px + env(safe-area-inset-bottom));z-index:5;display:flex;justify-content:center;gap:8px}
+    nav button{font-size:13px;background:#132c2eee;padding:10px 13px}
+    .sheet{position:fixed;inset:0;z-index:10;display:grid;place-items:center;padding:18px;background:#071c20bb;backdrop-filter:blur(14px)}
+    .sheet[hidden]{display:none}.card{width:min(560px,100%);max-height:92dvh;overflow:auto;padding:24px;border:1px solid #c6ac7655;border-radius:22px;background:linear-gradient(145deg,#203d3e,#102a2c);box-shadow:0 25px 100px #0006}
+    .eyebrow{color:var(--gold);font-size:11px;letter-spacing:3px}.card h2{font:600 28px/1.35 "Songti SC",serif;margin:10px 0}.card p{margin:10px 0}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+    .notice{border-left:2px solid var(--gold);padding:8px 12px;background:#ffffff06;font-size:12px;color:var(--muted)}
+    details{margin:12px 0}summary{cursor:pointer;color:var(--gold)}#error{color:#ffd0c2;white-space:pre-wrap;font-size:13px}
+    #targetImage{display:block;max-width:100%;max-height:55vh;margin:auto;background:white}
+    #pauseSheet{z-index:20}.pill{display:inline-block;background:#d3b57a15;border:1px solid #d3b57a55;border-radius:20px;padding:2px 9px;font-size:11px;color:var(--gold)}
+    @media(max-width:380px){.card{padding:18px}nav{gap:5px}nav button{padding:8px;font-size:12px}.row{grid-template-columns:1fr}}
+  </style>
+  <!-- The versions below match MindAR's documented Three.js integration.
+       This is one application HTML file, not an offline bundle: CDN libraries,
+       the .mind target, and the model remain separate downloaded resources. -->
+  <script type="importmap">
+  {"imports":{
+    "three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+    "mindar-image-three":"https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js"
+  }}
+  </script>
+</head>
+<body>
+  <div id="stage" aria-label="相机与增强现实画面"></div>
+  <div id="touch" aria-label="模型手势区域"></div>
+  <header class="brand"><span>MIN OPERA · WEBAR</span><h1 id="heading">闽韵 · 贬官记</h1></header>
+  <aside id="monitor" aria-label="性能监控">
+    <strong>LIVE PERFORMANCE</strong>
+    <div>初始化 ms <b id="latency">—</b></div>
+    <div>渲染 FPS <b id="fps">—</b></div>
+    <div>相机呈现 FPS <b id="cameraFps">—</b></div>
+    <div>姿态更新 Hz <b id="poseHz">—</b></div>
+    <div>首识别 ms <b id="firstTarget">—</b></div>
+    <div>当前模式 <b id="mode">未开始</b></div>
+  </aside>
+  <section id="statusBox" role="status" aria-live="polite"><div id="status">准备阅读</div><div id="hint">选择素材后启动相机</div></section>
+  <nav aria-label="实测控制">
+    <button id="reset" disabled>重置视角</button>
+    <button id="target">识别图</button>
+    <button id="export" disabled>导出记录</button>
+    <button id="stop" disabled>结束</button>
+  </nav>
+  <section class="sheet" id="setup"><div class="card">
+    <div class="eyebrow">READ THE STORY · EXPLORE THE FORM</div>
+    <h2>让戏曲走进眼前</h2>
+    <p class="small">图像识别 · 三维注册 · 丢失降级 · 实测记录</p>
+    <div class="notice">默认使用 MindAR 示例卡片和 Khronos 示例方块验证技术流程，均不是闽剧文化素材。正式测试请切换为你的《贬官记》识别图与模型。</div>
+    <label for="preset">素材模式</label><select id="preset"><option value="demo">示例验证（卡片＋方块）</option><option value="custom">我的闽剧素材</option></select>
+    <div class="row"><div><label for="device">设备型号（自行填写）</label><input id="device" placeholder="如 iPhone 15 / 华为 Pura 70" maxlength="80"></div><div><label for="runLabel">测试编号（不用姓名）</label><input id="runLabel" placeholder="如 D01-R01" maxlength="40"></div></div>
+    <div class="row"><div><label for="delay">持续丢失多久后居中</label><select id="delay"><option value="3000">超过 3 秒（默认）</option><option value="0">立即居中</option></select></div><div><label for="cacheState">缓存条件（自行记录）</label><select id="cacheState"><option value="unknown">未控制 / 不确定</option><option value="cold">已清理站点缓存</option><option value="warm">已加载过同一素材</option></select></div></div>
+    <details id="assetDetails"><summary>配置自己的识别图与模型</summary>
+      <p class="small">先用 <a href="https://hiukim.github.io/mind-ar-js-doc/tools/compile/" target="_blank" rel="noopener">MindAR 官方编译器</a> 将识别图片编译成 targets.mind。使用第一个目标（index 0）。</p>
+      <label for="targetUrl">识别文件 URL</label><input id="targetUrl" value="./targets.mind">
+      <label for="targetFile">或选取本机 .mind 文件（仅本机使用，不上传）</label><input type="file" id="targetFile" accept=".mind">
+      <label for="modelUrl">模型 URL（.glb 或 .gltf）</label><input id="modelUrl" value="./model.glb">
+      <label for="modelFile">或选取本机自包含 .glb（推荐）</label><input type="file" id="modelFile" accept=".glb">
+      <label for="imageUrl">用于展示的原始识别图 URL（与编译输入一致）</label><input id="imageUrl" value="./target.jpg">
+      <p class="small">URL形式的 .gltf 可带相对路径的 .bin／纹理；这些文件也必须上传。模型按包围盒居中归一化；朝向需按真实资产核对。</p>
+    </details>
+    <p class="small">点击启动将请求后置相机。应用不录音录像、不上传相机画面；依赖和素材会产生网络请求。记录暂存在本页内存中，请在关闭前导出。</p>
+    <div class="actions"><button class="primary" id="start">启动相机</button><button id="demoTarget">查看示例识别图</button></div>
+    <p id="error" role="alert"></p>
+    <noscript>需要开启 JavaScript 才能运行。</noscript>
+  </div></section>
+  <section class="sheet" id="targetSheet" hidden><div class="card"><div class="eyebrow">IMAGE TARGET</div><h2>请用另一块屏幕或纸张展示</h2><img id="targetImage" alt="当前识别目标"><p class="small" id="targetNote"></p><div class="actions"><button id="closeTarget">返回</button><a id="targetLink" target="_blank" rel="noopener">打开原图</a></div></div></section>
+  <section class="sheet" id="pauseSheet" hidden><div class="card"><h2>测试已暂停</h2><p>页面曾进入后台。返回后需重新识别卡片，后台时间不计入性能样本。</p><button class="primary" id="resume">继续测试</button></div></section>
+  <script type="module">
+  /* ======================== CONFIGURATION ======================== */
+  const CONFIG = Object.freeze({
+    build:'minopera-webar-20260930-v1', title:'闽韵 · 贬官记',
+    demoTarget:'https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.mind',
+    demoImage:'https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.png',
+    demoModel:'https://cdn.jsdelivr.net/gh/KhronosGroup/glTF-Sample-Assets@main/Models/Box/glTF-Binary/Box.glb',
+    blendMs:550, modelScale:0.8, maxPixelRatio:1.5,
+    warmupTolerance:5, missTolerance:5,
+    // These are presentation parameters, not calibrated physical dimensions.
+    centerViewportFraction:0.34, minZoom:0.5, maxZoom:2.4,
+    startupTimeoutMs:90000, fetchTimeoutMs:45000
+  });
+  const $=id=>document.getElementById(id), now=()=>performance.now();
+  $('heading').textContent=CONFIG.title;
+  let THREE, MindARThree, GLTFLoader, DRACOLoader, MeshoptDecoder;
+  let ar, anchor, root, model, mixer, loader, draco, phase='idle';
+  let tracked=false, acquired=false, ready=false, suspended=false, fatal=false;
+  let lossAt=null, firstFoundAt=null, blend=null, lastPose=null, centerPose=null;
+  let rafLast=null, windowAt=null, windowFrames=0, windowCamera=0, windowPoses=0;
+  let session=null, endAt=null, aborter=null, startupTimer=null, videoCallback=null;
+  let lastPresentedFrames=null, videoHooked=false, modelName='', targetName='';
+  let zoom=1, spinY=0, spinX=0, gestureBase=null;
+  const pointers=new Map(), ownedURLs=new Set();
+  const states={idle:'未开始',loading:'启动中',scanning:'寻找卡片',tracked:'贴附卡片',grace:'短暂丢失',centering:'平滑居中',fallback:'自由查看',returning:'自动贴回',paused:'已暂停',stopped:'已结束',error:'错误'};
+  function event(type,extra={}){if(session)session.events.push({type,elapsed_ms:Math.round(now()-session.clockStart),utc:new Date().toISOString(),...extra});}
+  function setPhase(value,hint){phase=value;$('mode').textContent=states[value];$('status').textContent=states[value];$('hint').textContent=hint||'';$('touch').classList.toggle('enabled',value==='fallback');$('reset').disabled=value!=='fallback';}
+  function externalURL(value){const u=new URL(value,location.href);if(!['https:','http:'].includes(u.protocol))throw Error('素材地址必须为 HTTPS URL 或相对路径');if(location.protocol==='https:'&&u.protocol!=='https:')throw Error('HTTPS 页面不能加载 HTTP 素材');return u.href;}
+  function objectURL(blob){const url=URL.createObjectURL(blob);ownedURLs.add(url);return url;}
+  function csvValue(v){let s=v==null?'':String(v);if(/^[=+@\-\t\r]/.test(s))s="'"+s;return '"'+s.replaceAll('"','""')+'"';}
+  function download(name,text,type){const u=URL.createObjectURL(new Blob([text],{type}));const a=document.createElement('a');a.href=u;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),10000);}
+  function resetWindow(t=now()){windowAt=t;windowFrames=windowCamera=windowPoses=0;rafLast=null;lastPresentedFrames=null;}
+  function copyPose(p){return {p:p.p.clone(),q:p.q.clone(),s:p.s.clone()};}
+  function readPose(object){object.updateMatrixWorld(true);const p=new THREE.Vector3(),q=new THREE.Quaternion(),s=new THREE.Vector3();object.matrixWorld.decompose(p,q,s);return {p,q,s};}
+  function applyPose(p){root.position.copy(p.p);root.quaternion.copy(p.q);root.scale.copy(p.s);root.updateMatrixWorld(true);}
+  function resetGesture(){pointers.clear();gestureBase=null;zoom=1;spinX=spinY=0;}
+  function beginBlend(to,kind){blend={from:readPose(root),to:copyPose(to),started:now(),kind};setPhase(kind,kind==='returning'?'已恢复识别，正在回到卡片':'模型正在移到屏幕中央');event(kind);}
+  function targetPose(){anchor.group.updateMatrixWorld(true);return readPose(anchor.group);}
+  function makeCenterPose(){
+    // Root is always a direct child of the AR scene. MindAR owns ONLY the anchor.
+    // Detaching presentation from the anchor prevents MindAR's hidden/zero matrix
+    // on loss from making the model disappear. The same camera projects both poses.
+    const camera=ar.camera;camera.updateMatrixWorld(true);
+    const view=root.position.clone().applyMatrix4(camera.matrixWorldInverse);
+    const distance=THREE.MathUtils.clamp(-view.z,camera.near*5,camera.far*0.25);
+    const vertical=2*distance*Math.tan(THREE.MathUtils.degToRad(camera.fov/2));
+    const shortSide=vertical*Math.min(1,camera.aspect);
+    // The model's bounding-sphere diameter was normalized to 1, then scaled by .8.
+    const scale=shortSide*CONFIG.centerViewportFraction/CONFIG.modelScale;
+    return {p:new THREE.Vector3(0,0,-distance).applyMatrix4(camera.matrixWorld),q:camera.getWorldQuaternion(new THREE.Quaternion()),s:new THREE.Vector3(scale,scale,scale)};
+  }
+  function onFound(){
+    if(!ready||suspended||fatal||phase==='stopped')return;
+    const t=now();if(tracked)return;tracked=true;
+    event('target_found',{loss_event_to_found_ms:lossAt===null?null:Math.round(t-lossAt)});lossAt=null;
+    if(firstFoundAt===null){firstFoundAt=t;session.metrics.first_target_after_ready_ms=t-session.readyAt;$('firstTarget').textContent=Math.round(session.metrics.first_target_after_ready_ms);}
+    if(!acquired){acquired=true;root.visible=true;applyPose(targetPose());setPhase('tracked','移动手机，观察模型是否稳定贴附');}
+    else{resetGesture();beginBlend(targetPose(),'returning');}
+    resetWindow(t);
+  }
+  function onLost(){
+    if(!ready||suspended||fatal||!tracked||!acquired)return;
+    tracked=false;lossAt=now();blend=null;resetGesture();
+    // Keep the last rendered world pose; NEVER read MindAR's now-zeroed anchor.
+    lastPose=readPose(root);event('target_lost');setPhase('grace',session.fallbackDelayMs?'短暂保留上次位置；持续丢失超过3秒后居中':'准备切换自由查看');resetWindow();
+  }
+  function updatePresentation(t){
+    if(!acquired)return;
+    if(tracked&&phase==='tracked')applyPose(targetPose());
+    if(!tracked&&phase==='grace'&&lossAt!==null&&t-lossAt>session.fallbackDelayMs){
+      centerPose=makeCenterPose();resetGesture();beginBlend(centerPose,'centering');
+      event('fallback_trigger',{delay_from_lost_event_ms:Math.round(t-lossAt)});
+    }
+    if(blend){
+      if(blend.kind==='returning'&&tracked)blend.to=targetPose(); // moving card is a moving destination
+      const u=THREE.MathUtils.clamp((t-blend.started)/CONFIG.blendMs,0,1),e=u*u*(3-2*u);
+      root.position.lerpVectors(blend.from.p,blend.to.p,e);root.quaternion.slerpQuaternions(blend.from.q,blend.to.q,e);root.scale.lerpVectors(blend.from.s,blend.to.s,e);
+      if(u===1){const kind=blend.kind;blend=null;
+        if(kind==='centering'){setPhase('fallback','单指旋转 · 双指缩放；重新对准卡片会自动贴回');event('fallback_ready',{delay_from_lost_event_ms:Math.round(t-lossAt)});}
+        else{setPhase('tracked','已自动贴回卡片');event('reattached');}resetWindow(t);
+      }
+    }else if(phase==='fallback'&&centerPose){
+      root.position.copy(centerPose.p);root.quaternion.copy(centerPose.q).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(spinX,spinY,0,'YXZ')));root.scale.copy(centerPose.s).multiplyScalar(zoom);
+    }
+  }
+  function hookVideo(){
+    const video=ar?.video;if(!video||videoHooked)return;videoHooked=true;
+    session.camera=video.srcObject?.getVideoTracks()[0]?.getSettings()||{};
+    // Do not export persistent hardware identifiers.
+    delete session.camera.deviceId;delete session.camera.groupId;
+    if(!video.requestVideoFrameCallback){session.metrics.camera_fps_method='unsupported';return;}
+    session.metrics.camera_fps_method='requestVideoFrameCallback.presentedFrames';
+    const tick=(t,meta)=>{
+      if(phase==='stopped'||fatal)return;
+      if(!suspended&&ready&&lastPresentedFrames!==null)windowCamera+=Math.max(0,meta.presentedFrames-lastPresentedFrames);
+      lastPresentedFrames=meta.presentedFrames;videoCallback=video.requestVideoFrameCallback(tick);
+    };videoCallback=video.requestVideoFrameCallback(tick);
+  }
+  function frame(){
+    if(!ready||suspended||fatal||phase==='stopped')return;
+    const t=now();try{
+      const dt=rafLast===null?0:Math.min((t-rafLast)/1000,.1);rafLast=t;
+      if(mixer)mixer.update(dt);updatePresentation(t);
+      ar.renderer.render(ar.scene,ar.camera);windowFrames++;const renderFinished=now();
+      // Init latency ends only after the first actual render submission following
+      // successful model loading + tracker startup. Permission/network wait included.
+      if(session.metrics.initialization_ms===null){session.metrics.initialization_ms=renderFinished-session.clockStart;$('latency').textContent=Math.round(session.metrics.initialization_ms);event('first_render_submitted');}
+      const elapsed=renderFinished-windowAt;
+      if(elapsed>=1000){
+        const fps=1000*windowFrames/elapsed,cam=videoHooked&&ar.video.requestVideoFrameCallback?1000*windowCamera/elapsed:null;
+        const sample={elapsed_ms:Math.round(renderFinished-session.clockStart),state:phase,window_ms:elapsed,rendered_frames:windowFrames,render_fps:fps,camera_presented_fps:cam,pose_updates:windowPoses,pose_hz:1000*windowPoses/elapsed};
+        session.samples.push(sample);$('fps').textContent=fps.toFixed(1);$('cameraFps').textContent=cam===null?'N/A':cam.toFixed(1);$('poseHz').textContent=sample.pose_hz.toFixed(1);
+        windowAt=renderFinished;windowFrames=windowCamera=windowPoses=0;
+      }
+    }catch(e){fail(e);}
+  }
+  function rebaseGesture(){const p=[...pointers.values()];gestureBase=p.length===1?{x:p[0].x,y:p[0].y,sx:spinX,sy:spinY}:p.length>=2?{distance:Math.max(1,Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y)),zoom}:null;}
+  $('touch').addEventListener('pointerdown',e=>{if(phase!=='fallback')return;e.preventDefault();pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});$('touch').setPointerCapture(e.pointerId);rebaseGesture();event('gesture_start',{pointers:pointers.size});});
+  $('touch').addEventListener('pointermove',e=>{
+    if(phase!=='fallback'||!pointers.has(e.pointerId))return;e.preventDefault();pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});const p=[...pointers.values()];
+    if(p.length===1&&gestureBase&&'x' in gestureBase){spinY=gestureBase.sy+(p[0].x-gestureBase.x)*.009;spinX=THREE.MathUtils.clamp(gestureBase.sx+(p[0].y-gestureBase.y)*.009,-Math.PI/2,Math.PI/2);}
+    else if(p.length>=2&&gestureBase?.distance){zoom=THREE.MathUtils.clamp(gestureBase.zoom*Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y)/gestureBase.distance,CONFIG.minZoom,CONFIG.maxZoom);}
+  });
+  for(const type of ['pointerup','pointercancel','lostpointercapture'])$('touch').addEventListener(type,e=>{if(pointers.delete(e.pointerId)){rebaseGesture();event('gesture_end',{zoom,rotation_x:spinX,rotation_y:spinY});}});
+  $('reset').onclick=()=>{resetGesture();event('view_reset');};
+  async function importLibraries(){
+    [THREE,{MindARThree},{GLTFLoader},{DRACOLoader},{MeshoptDecoder}]=await Promise.all([
+      import('three'),import('mindar-image-three'),import('three/addons/loaders/GLTFLoader.js'),import('three/addons/loaders/DRACOLoader.js'),import('three/addons/libs/meshopt_decoder.module.js')]);
+  }
+  async function fetchBuffer(url){
+    const controller=new AbortController();const abort=()=>controller.abort();aborter.signal.addEventListener('abort',abort,{once:true});const timer=setTimeout(abort,CONFIG.fetchTimeoutMs);
+    try{const r=await fetch(url,{signal:controller.signal});if(!r.ok)throw Error(`素材下载失败：HTTP ${r.status}`);return await r.arrayBuffer();}
+    finally{clearTimeout(timer);aborter.signal.removeEventListener('abort',abort);}
+  }
+  async function loadAssets(){
+    const demo=$('preset').value==='demo';session.assetMode=demo?'technical_demo':'custom_unreviewed';
+    const tf=$('targetFile').files[0],mf=$('modelFile').files[0];
+    targetName=demo?'MindAR card.mind':tf?tf.name:$('targetUrl').value;
+    modelName=demo?'Khronos Box.glb':mf?mf.name:$('modelUrl').value;
+    const targetBuffer=await(!demo&&tf?tf.arrayBuffer():fetchBuffer(externalURL(demo?CONFIG.demoTarget:$('targetUrl').value)));
+    if(fatal)throw Error('启动已取消');
+    const targetSrc=objectURL(new Blob([targetBuffer],{type:'application/octet-stream'}));
+    loader=new GLTFLoader();draco=new DRACOLoader();draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/draco/');loader.setDRACOLoader(draco);loader.setMeshoptDecoder(MeshoptDecoder);
+    let modelBuffer,basePath;
+    if(!demo&&mf){modelBuffer=await mf.arrayBuffer();basePath='';}
+    else{const url=externalURL(demo?CONFIG.demoModel:$('modelUrl').value);basePath=new URL('.',url).href;modelBuffer=await fetchBuffer(url);}
+    const gltf=await loader.parseAsync(modelBuffer,basePath);
+    if(fatal)throw Error('启动已取消');
+    const hash=async b=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',b)),x=>x.toString(16).padStart(2,'0')).join('');
+    session.assets={target_name:targetName,model_name:modelName,target_sha256:await hash(targetBuffer),model_main_file_sha256:await hash(modelBuffer),target_bytes:targetBuffer.byteLength,model_main_file_bytes:modelBuffer.byteLength,external_gltf_dependencies_not_hashed:true};
+    model=gltf.scene;model.updateMatrixWorld(true);const box=new THREE.Box3().setFromObject(model),sphere=box.getBoundingSphere(new THREE.Sphere());
+    if(!Number.isFinite(sphere.radius)||sphere.radius<=0)throw Error('模型为空或包围盒无效');
+    const centered=new THREE.Group();centered.add(model);model.position.sub(sphere.center);centered.scale.setScalar(CONFIG.modelScale/(2*sphere.radius));
+    root=new THREE.Group();root.add(centered);root.visible=false;
+    if(gltf.animations.length){mixer=new THREE.AnimationMixer(model);mixer.clipAction(gltf.animations[0]).play();}
+    session.metrics.assets_ready_ms=now()-session.clockStart;return targetSrc;
+  }
+  function cleanCamera(){
+    try{ar?.controller?.stopProcessVideo();}catch{}
+    if(ar?.video){if(videoCallback!==null&&ar.video.cancelVideoFrameCallback)ar.video.cancelVideoFrameCallback(videoCallback);ar.video.srcObject?.getTracks().forEach(t=>t.stop());ar.video.remove();}
+    ar?.renderer?.setAnimationLoop(null);
+  }
+  function disposeModel(){
+    mixer?.stopAllAction();const geometries=new Set(),materials=new Set(),textures=new Set();
+    root?.traverse(o=>{if(o.geometry)geometries.add(o.geometry);for(const m of [].concat(o.material||[])){materials.add(m);for(const value of Object.values(m))if(value?.isTexture)textures.add(value);}});
+    geometries.forEach(g=>g.dispose());textures.forEach(t=>t.dispose());materials.forEach(m=>m.dispose());draco?.dispose();
+  }
+  function fail(error){
+    if(fatal||phase==='stopped')return;fatal=true;clearTimeout(startupTimer);aborter?.abort();event('error',{message:String(error?.message||error||'相机授权或追踪启动失败')});endAt=now();
+    cleanCamera();disposeModel();ar?.renderer?.dispose();root&&(root.visible=false);setPhase('error','可先导出错误记录，再刷新重试');
+    $('error').textContent='启动／运行失败：'+String(error?.message||error||'请检查相机权限、HTTPS 和素材文件')+'\n修正后刷新页面重试。';$('setup').hidden=false;$('start').textContent='刷新重试';$('start').disabled=false;$('start').onclick=()=>location.reload();$('stop').disabled=true;$('export').disabled=!session;
+  }
+  async function start(){
+    if(phase!=='idle')return;
+    if(!window.isSecureContext||!navigator.mediaDevices?.getUserMedia){$('error').textContent='请在 HTTPS 地址中打开，并允许相机。电脑 localhost 可开发调试；手机局域网 HTTP 地址不可用于本测试。';return;}
+    $('start').disabled=true;document.querySelectorAll('#setup input, #setup select').forEach(el=>el.disabled=true);$('error').textContent='';setPhase('loading','正在加载模型与追踪引擎…');aborter=new AbortController();
+    session={schema_version:1,build:CONFIG.build,session_id:crypto.randomUUID(),started_utc:new Date().toISOString(),clockStart:now(),readyAt:null,device_label:$('device').value.trim(),run_label:$('runLabel').value.trim(),cache_condition:$('cacheState').value,user_agent:navigator.userAgent,viewport:{width:innerWidth,height:innerHeight,dpr:devicePixelRatio},library_versions:{mindar:'1.2.5',three:'0.160.0'},fallbackDelayMs:Number($('delay').value),blend_ms:CONFIG.blendMs,tracker_parameters:{warmupTolerance:CONFIG.warmupTolerance,missTolerance:CONFIG.missTolerance},metrics:{initialization_ms:null,assets_ready_ms:null,tracker_ready_ms:null,first_target_after_ready_ms:null,camera_fps_method:null},samples:[],events:[]};
+    event('start_clicked');$('export').disabled=false;
+    startupTimer=setTimeout(()=>fail(Error('启动超过90秒：可能是素材错误、网络阻塞或权限尚未确认。请导出记录后刷新。')),CONFIG.startupTimeoutMs);
+    try{
+      await importLibraries();if(fatal)return;event('libraries_loaded');
+      const targetSrc=await loadAssets();if(fatal)return;event('assets_loaded');
+      ar=new MindARThree({container:$('stage'),imageTargetSrc:targetSrc,maxTrack:1,uiLoading:'no',uiScanning:'no',uiError:'no',warmupTolerance:CONFIG.warmupTolerance,missTolerance:CONFIG.missTolerance});
+      ar.renderer.setPixelRatio(Math.min(devicePixelRatio,CONFIG.maxPixelRatio));ar.renderer.outputColorSpace=THREE.SRGBColorSpace;ar.renderer.toneMapping=THREE.ACESFilmicToneMapping;ar.renderer.toneMappingExposure=1.1;
+      session.effective_pixel_ratio=ar.renderer.getPixelRatio();ar.cssRenderer.domElement.style.display='none';
+      ar.scene.add(new THREE.HemisphereLight(0xfff6df,0x263e46,2.2));const key=new THREE.DirectionalLight(0xffffff,2);key.position.set(1,2,3);ar.scene.add(key);ar.scene.add(root);
+      anchor=ar.addAnchor(0);anchor.onTargetFound=onFound;anchor.onTargetLost=onLost;anchor.onTargetUpdate=()=>{if(ready&&!suspended&&anchor.visible)windowPoses++;};
+      ar.renderer.domElement.addEventListener('webglcontextlost',e=>{e.preventDefault();fail(Error('WebGL 上下文丢失；本次测试已结束，请刷新重试'));});
+      await ar.start();
+      // MindAR's internal startup is not abortable. If permission resolves after
+      // our watchdog, stop its late-arriving stream instead of leaving camera on.
+      if(fatal){cleanCamera();return;}
+      session.readyAt=now();session.metrics.tracker_ready_ms=session.readyAt-session.clockStart;ready=true;clearTimeout(startupTimer);
+      $('setup').hidden=true;$('stop').disabled=false;setPhase('scanning','请对准识别图；首次识别后才会启用丢失降级');hookVideo();resetWindow();ar.renderer.setAnimationLoop(frame);event('tracker_ready');
+      if(document.hidden)pause();else if(anchor.visible)onFound();
+    }catch(e){fail(e);}
+  }
+  function pause(){
+    if(!ready||suspended||fatal||phase==='stopped')return;suspended=true;event('visibility_pause');
+    try{ar.controller.stopProcessVideo();}catch{}ar.renderer.setAnimationLoop(null);tracked=false;acquired=false;lossAt=null;blend=null;root.visible=false;resetGesture();setPhase('paused','返回后重新识别');resetWindow();$('pauseSheet').hidden=false;
+  }
+  $('resume').onclick=()=>{
+    if(!suspended||fatal||phase==='stopped')return;
+    // Recreate engine visibility state so reacquisition emits onTargetFound.
+    anchor.visible=false;anchor.group.visible=false;suspended=false;$('pauseSheet').hidden=true;resetWindow();setPhase('scanning','请重新对准卡片');event('visibility_resume');
+    try{ar.video.play().catch(fail);ar.controller.processVideo(ar.video);ar.renderer.setAnimationLoop(frame);}catch(e){fail(e);}
+  };
+  document.addEventListener('visibilitychange',()=>{if(document.hidden)pause();});
+  window.addEventListener('pagehide',()=>{if(session&&phase!=='stopped'&&!fatal){event('pagehide');cleanCamera();}});
+  window.addEventListener('resize',()=>{if(phase==='fallback'&&ar){centerPose=makeCenterPose();event('viewport_changed',{width:innerWidth,height:innerHeight});}});
+  // Runtime dependency and worker errors must not leave a silent camera preview.
+  window.addEventListener('unhandledrejection',e=>{if(session&&!fatal&&phase!=='stopped')fail(e.reason);});
+  window.addEventListener('error',e=>{if(session&&!fatal&&phase!=='stopped'&&e.message)fail(Error(e.message));});
+  function snapshot(){
+    const perState={};for(const s of session.samples){const a=perState[s.state]??={frames:0,ms:0,windows:0};a.frames+=s.rendered_frames;a.ms+=s.window_ms;a.windows++;}
+    for(const a of Object.values(perState))a.render_fps=1000*a.frames/a.ms;
+    const {clockStart,readyAt,...data}=session;
+    return {...data,exported_utc:new Date().toISOString(),ended:endAt!==null,elapsed_ms:(endAt??now())-clockStart,summary:{sampled_render_fps_by_state:perState,fallback_count:session.events.filter(e=>e.type==='fallback_ready').length,loss_event_count:session.events.filter(e=>e.type==='target_lost').length},measurement_notes:{initialization:'Start click to first render submission after assets and tracker ready; includes network and permission wait; not motion-to-photon latency.',render_fps:'Completed renderer.render calls per foreground one-second window; not GPU timing, display refresh rate, or tracking inference FPS.',camera_fps:'Presented video frames from requestVideoFrameCallback; N/A when unsupported.',pose_hz:'Non-null anchor update callbacks per sampled foreground window.',loss_delay:'Measured from MindAR onTargetLost callback; engine miss tolerance adds prior delay.',summary:'Time-weighted across complete sample windows only; partial transition windows are excluded.'}};
+  }
+  $('export').onclick=()=>{
+    if(!session)return;event('export_requested');const data=snapshot(),base='minopera_'+session.session_id;
+    download(base+'.json',JSON.stringify(data,null,2),'application/json');
+    // CSV is a separate optional user gesture, avoiding mobile multiple-download blocks.
+    $('export').textContent='导出记录';$('hint').textContent='JSON已生成；包含逐秒性能与事件。请确认文件已保存。';
+  };
+  window.exportPerformanceCSV=()=>{if(!session)return;const keys=['elapsed_ms','state','window_ms','rendered_frames','render_fps','camera_presented_fps','pose_updates','pose_hz'];download('minopera_'+session.session_id+'.csv','\uFEFF'+[keys.join(','),...session.samples.map(s=>keys.map(k=>csvValue(s[k])).join(','))].join('\r\n'),'text/csv;charset=utf-8');};
+  // Long press is not required: a visible CSV button is appended programmatically.
+  const csvButton=document.createElement('button');csvButton.textContent='CSV';csvButton.onclick=()=>window.exportPerformanceCSV();document.querySelector('nav').insertBefore(csvButton,$('stop'));
+  $('stop').onclick=()=>{if(!ready||phase==='stopped')return;event('session_end');endAt=now();cleanCamera();disposeModel();ar.renderer.dispose();ownedURLs.forEach(URL.revokeObjectURL);ownedURLs.clear();setPhase('stopped','请导出JSON记录；开始下一轮需刷新页面');$('stop').disabled=true;$('pauseSheet').hidden=true;};
+  function showTarget(forceDemo=false){
+    let url;try{url=externalURL(forceDemo||$('preset').value==='demo'?CONFIG.demoImage:$('imageUrl').value);}catch(e){$('error').textContent=e.message;return;}
+    $('targetImage').src=url;$('targetLink').href=url;$('targetNote').textContent=forceDemo||$('preset').value==='demo'?'这是MindAR官方示例识别图，不是闽剧素材。请在电脑屏幕打开，让手机扫描。':'请确认这张图正是 .mind 编译时的第一张输入图；文件名相同并不保证内容相同。';$('targetSheet').hidden=false;
+  }
+  $('targetImage').onerror=()=>{$('targetNote').textContent='原始识别图无法加载。请检查地址；仅查看原图失败不等于 .mind 无效。';};
+  $('target').onclick=()=>showTarget();$('demoTarget').onclick=()=>showTarget(true);$('closeTarget').onclick=()=>{$('targetSheet').hidden=true;};
+  $('preset').onchange=()=>{$('assetDetails').open=$('preset').value==='custom';};$('start').onclick=start;
+  </script>
+</body>
+</html>
