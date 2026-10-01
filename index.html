@@ -3,18 +3,24 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Min Opera AR Semantic Reading</title>
+<title>《贬官记》WebAR阅读系统</title>
 
-<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+
 <style>
-body{margin:0;overflow:hidden;background:#111;font-family:"Noto Serif SC",serif}
 #info{
-position:fixed;right:15px;top:15px;
-width:260px;padding:15px;
-background:#10241ddd;color:#f4dfaa;
-border:1px solid #b9924c;
-z-index:10;border-radius:12px
+position:fixed;
+top:15px;
+right:15px;
+z-index:999;
+background:#10251fdd;
+color:#f5dfaa;
+border:1px solid #c9a85c;
+padding:15px;
+border-radius:12px;
+font-family:serif;
+width:230px;
 }
 </style>
 </head>
@@ -23,68 +29,62 @@ z-index:10;border-radius:12px
 
 <div id="info">
 <h3>《贬官记》AR阅读</h3>
-<div id="text">等待识别...</div>
-<div id="gate">Semantic Gate: LOCKED</div>
+<div id="status">正在启动相机...</div>
+<div id="content">等待识别角色卡</div>
 </div>
+
+<a-scene
+mindar-image="imageTargetSrc: ./assets/targets/bgji_targets.mind; autoStart: true;"
+color-space="sRGB"
+renderer="colorManagement: true, physicallyCorrectLights"
+vr-mode-ui="enabled:false"
+device-orientation-permission-ui="enabled:false">
+
+<a-camera position="0 0 0" look-controls="enabled:false"></a-camera>
+
+<a-entity mindar-image-target="targetIndex:0" id="target0">
+<a-plane
+position="0 0 0"
+width="1"
+height="1.4"
+material="color:#d4af37; opacity:0.25">
+</a-plane>
+</a-entity>
+
+<a-entity mindar-image-target="targetIndex:1" id="target1">
+</a-entity>
+
+<a-entity mindar-image-target="targetIndex:2" id="target2">
+</a-entity>
+
+</a-scene>
 
 <script>
 
-let sceneData={};
+const data=[
+{
+name:"崔云龙",
+desc:"《贬官记》人物卡：崔云龙"
+},
+{
+name:"张岫玉",
+desc:"《贬官记》人物卡：张岫玉"
+},
+{
+name:"边一笑",
+desc:"《贬官记》人物卡：边一笑"
+}
+];
 
-fetch("./assets/data/scene.json")
-.then(r=>r.json())
-.then(d=>sceneData=d);
-
-
-function semantic_gate_check(data){
-return data.audited===true &&
-data.version_matched===true &&
-data.resource_valid===true;
+function show(i){
+document.querySelector("#status").innerHTML="识别成功";
+document.querySelector("#content").innerHTML=
+data[i].name+"<br>"+data[i].desc;
 }
 
-
-async function startAR(){
-
-const mindarThree=new MINDAR.IMAGE.MindARThree({
-container:document.body,
-imageTargetSrc:"./assets/targets/bgji_targets.mind"
-});
-
-const {renderer,scene,camera}=mindarThree;
-
-const anchor0=mindarThree.addAnchor(0);
-
-anchor0.onTargetFound=()=>{
-
-const data=sceneData["BGJ_CHAR_008"];
-
-document.querySelector("#text").innerHTML=
-data.title+"<br>"+data.description;
-
-document.querySelector("#gate").innerHTML=
-semantic_gate_check(data)?
-"Semantic Gate: PASS":
-"Semantic Gate: BLOCK";
-
-};
-
-anchor0.onTargetLost=()=>{
-
-document.querySelector("#text").innerHTML=
-"Tracking lost. Waiting...";
-
-};
-
-
-await mindarThree.start();
-
-renderer.setAnimationLoop(()=>{
-renderer.render(scene,camera);
-});
-
-}
-
-startAR();
+document.querySelector("#target0").addEventListener("targetFound",()=>show(0));
+document.querySelector("#target1").addEventListener("targetFound",()=>show(1));
+document.querySelector("#target2").addEventListener("targetFound",()=>show(2));
 
 </script>
 
