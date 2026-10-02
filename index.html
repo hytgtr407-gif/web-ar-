@@ -90,9 +90,9 @@ function show(i){
  logEvent("target_found",data[i].id);
 }
 
-target0.addEventListener("targetFound",()=>show(1));
+target0.addEventListener("targetFound",()=>show(2));
 target1.addEventListener("targetFound",()=>show(0));
-target2.addEventListener("targetFound",()=>show(2));
+target2.addEventListener("targetFound",()=>show(1));
 
 target0.addEventListener("targetLost",()=>logEvent("target_lost","BGJ_CHAR_008"));
 target1.addEventListener("targetLost",()=>logEvent("target_lost","BGJ_CHAR_007"));
