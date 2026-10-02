@@ -30,7 +30,7 @@ width:230px;
 <div id="info">
 <h3>《贬官记》AR阅读</h3>
 <div id="status">正在启动相机...</div>
-<div id="content">等待识别角色卡</div>
+<div id="content">等待识别角色卡</div><button onclick="exportLogs()">导出实验日志</button>
 </div>
 
 <a-scene
@@ -61,31 +61,55 @@ material="color:#d4af37; opacity:0.25">
 
 <script>
 
+
 const data=[
-{
-name:"崔云龙",
-desc:"《贬官记》人物卡：崔云龙"
-},
-{
-name:"张岫玉",
-desc:"《贬官记》人物卡：张岫玉"
-},
-{
-name:"边一笑",
-desc:"《贬官记》人物卡：边一笑"
-}
+{id:"BGJ_CHAR_007",name:"张岫玉",desc:"《贬官记》人物卡：张岫玉"},
+{id:"BGJ_CHAR_008",name:"崔云龙",desc:"《贬官记》人物卡：崔云龙"},
+{id:"BGJ_CHAR_006",name:"边一笑",desc:"《贬官记》人物卡：边一笑"}
 ];
 
-function show(i){
-document.querySelector("#status").innerHTML="识别成功";
-document.querySelector("#content").innerHTML=
-data[i].name+"<br>"+data[i].desc;
+const logs=[];
+const userID="anonymous_"+Math.random().toString(36).substring(2,8);
+const sessionStart=Date.now();
+
+function logEvent(eventName,targetID){
+ const log={
+  user_id:userID,
+  target_id:targetID,
+  event:eventName,
+  timestamp:new Date().toISOString(),
+  elapsed_ms:Date.now()-sessionStart
+ };
+ logs.push(log);
+ console.log(log);
 }
 
-document.querySelector("#target0").addEventListener("targetFound",()=>show(0));
-document.querySelector("#target1").addEventListener("targetFound",()=>show(1));
-document.querySelector("#target2").addEventListener("targetFound",()=>show(2));
+function show(i){
+ document.querySelector("#status").innerHTML="识别成功";
+ document.querySelector("#content").innerHTML=data[i].name+"<br>"+data[i].desc;
+ logEvent("target_found",data[i].id);
+}
 
+target0.addEventListener("targetFound",()=>show(1));
+target1.addEventListener("targetFound",()=>show(0));
+target2.addEventListener("targetFound",()=>show(2));
+
+target0.addEventListener("targetLost",()=>logEvent("target_lost","BGJ_CHAR_008"));
+target1.addEventListener("targetLost",()=>logEvent("target_lost","BGJ_CHAR_007"));
+target2.addEventListener("targetLost",()=>logEvent("target_lost","BGJ_CHAR_006"));
+
+function exportLogs(){
+ let csv="user_id,target_id,event,timestamp,elapsed_ms\n";
+ logs.forEach(l=>{
+  csv+=`${l.user_id},${l.target_id},${l.event},${l.timestamp},${l.elapsed_ms}\n`;
+ });
+ let blob=new Blob([csv],{type:"text/csv"});
+ let url=URL.createObjectURL(blob);
+ let a=document.createElement("a");
+ a.href=url;
+ a.download="AR_interaction_logs.csv";
+ a.click();
+}
 </script>
 
 </body>
