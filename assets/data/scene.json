@@ -1,23 +1,29 @@
 {
   "BGJ_CHAR_008": {
+    "id": "BGJ_CHAR_008",
+    "targetIndex": 1,
     "title": "崔云龙",
-    "target": "cuiyunlong.mind",
+    "target": "assets/targets/bgji_targets.mind",
     "description": "《贬官记》人物卡：崔云龙。此内容用于交互阅读原型展示。",
     "audited": false,
     "version_matched": true,
     "resource_valid": true
   },
   "BGJ_CHAR_007": {
+    "id": "BGJ_CHAR_007",
+    "targetIndex": 2,
     "title": "张岫玉",
-    "target": "zhangxiuyu.mind",
+    "target": "assets/targets/bgji_targets.mind",
     "description": "《贬官记》人物卡：张岫玉。此内容用于交互阅读原型展示。",
     "audited": false,
     "version_matched": true,
     "resource_valid": true
   },
   "BGJ_CHAR_006": {
+    "id": "BGJ_CHAR_006",
+    "targetIndex": 0,
     "title": "边一笑",
-    "target": "bianyixiao.mind",
+    "target": "assets/targets/bgji_targets.mind",
     "description": "《贬官记》人物卡：边一笑。此内容用于交互阅读原型展示。",
     "audited": false,
     "version_matched": true,

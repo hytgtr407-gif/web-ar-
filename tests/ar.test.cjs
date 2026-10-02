@@ -7,6 +7,12 @@ const { createHash } = require('node:crypto');
 const root = path.join(__dirname, '..');
 const source = fs.readFileSync(path.join(root, 'assets/app.js'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+const productionMetadata = JSON.parse(fs.readFileSync(path.join(root, 'assets/data/scene.json'), 'utf8'));
+function allowedFixture() {
+  const data = structuredClone(productionMetadata);
+  for (const record of Object.values(data)) record.audited = true;
+  return data;
+}
 
 class Element {
   constructor() { this.listeners = {}; this.attributes = {}; this.textContent = ''; this.disabled = false; }
@@ -51,6 +57,9 @@ async function app(options = {}) {
       const entity = new Element();
       entity.id = 'target' + match[1];
       entity.components = { 'mindar-image-target': { data: { targetIndex: Number(match[2]) } } };
+      entity.semanticContent = new Element();
+      entity.semanticContent.setAttribute('visible', false);
+      entity.querySelector = () => entity.semanticContent;
       return entity;
     });
     scene.querySelectorAll = () => scene.entities;
@@ -68,11 +77,16 @@ async function app(options = {}) {
   }
   vm.runInNewContext(source, {
     window, document, navigator: { mediaDevices: options.noCamera ? {} : { getUserMedia() {} } },
-    URL: TestURL, URLSearchParams, Blob, AbortController, console: { warn() {} },
+    URL: TestURL, URLSearchParams, Blob, AbortController, TextDecoder, console: { warn() {} },
     setTimeout: (callback, ms) => { const id = timers.size + 1; timers.set(id, { callback, ms }); return id; },
     clearTimeout: id => timers.delete(id),
-    fetch: async url => {
+    fetch: async (url, init) => {
       url = String(url); requests.push(url);
+      if (url.endsWith('/assets/data/scene.json')) {
+        if (options.metadataTimeout) return new Promise((resolve, reject) => init.signal.addEventListener('abort', () => reject(new Error('Timeout')), { once: true }));
+        return { ok: !options.metadataFail, status: options.metadataFail ? 404 : 200,
+          arrayBuffer: async () => Buffer.from(options.metadataText ?? JSON.stringify(options.metadata ?? productionMetadata)) };
+      }
       if (options.primaryFail && url.includes('cdn.jsdelivr.net')) throw new Error('CDN unreachable');
       const bad = options.targetFail && url.endsWith('.mind');
       return { ok: !bad, status: bad ? 404 : 200, arrayBuffer: async () => Buffer.from(url) };
@@ -112,32 +126,131 @@ test('child loaded events do not start MindAR before the whole scene loads', asy
 });
 
 test('all three cards display the binary-verified role and export matching found/lost IDs and indices', async () => {
-  const a = await app(); a.ready();
+  const a = await app({ metadata: allowedFixture() }); a.ready();
   const expected = [['边一笑', 'BGJ_CHAR_006'], ['崔云龙', 'BGJ_CHAR_008'], ['张岫玉', 'BGJ_CHAR_007']];
   assert.equal(a.scene.entities.length, 3);
   for (const [index, entity] of a.scene.entities.entries()) {
     entity.emit('targetFound');
     assert.ok(a.ids.content.textContent.startsWith(expected[index][0]));
+    assert.equal(entity.semanticContent.attributes.visible, true);
     assert.ok(a.ids['debug-overlay'].textContent.includes(`targetIndex: ${index}`));
     entity.emit('targetLost');
     assert.equal(a.ids.status.textContent, '卡片已离开画面');
+    assert.equal(entity.semanticContent.attributes.visible, false);
   }
   const csv = await a.csv();
   for (const [index, [, id]] of expected.entries()) {
     assert.ok(csv.includes(`,${id},${index},target_found,`));
     assert.ok(csv.includes(`,${id},${index},target_lost,`));
+    assert.ok(csv.includes(`,${id},${index},semantic_gate_pass,`));
   }
 });
 
 test('read the actual MindAR component index, even when DOM IDs/order disagree', async () => {
-  const a = await app(); a.ready();
+  const a = await app({ metadata: allowedFixture() }); a.ready();
   a.scene.entities[0].components['mindar-image-target'].data.targetIndex = 2;
   a.scene.entities[0].emit('targetFound');
   assert.ok(a.ids.content.textContent.startsWith('张岫玉'));
   assert.ok(a.ids['debug-overlay'].textContent.includes('targetIndex: 2'));
   a.scene.entities[0].components['mindar-image-target'].data.targetIndex = 9;
   a.scene.entities[0].emit('targetFound');
-  assert.equal(a.ids.content.textContent, '未知 targetIndex: 9');
+  assert.equal(a.ids.status.textContent, '识别到未配置卡片');
+  assert.equal(a.scene.entities[0].semanticContent.attributes.visible, false);
+  assert.ok((await a.csv()).includes(',unknown_target'));
+});
+
+test('production records remain unaudited and block text and AR layers for all three cards', async () => {
+  const a = await app(); a.ready();
+  assert.deepEqual(a.requests.filter(url => url.endsWith('scene.json')), ['https://example.github.io/web-ar-/assets/data/scene.json']);
+  for (const entity of a.scene.entities) {
+    const index = entity.components['mindar-image-target'].data.targetIndex;
+    const id = ['BGJ_CHAR_006', 'BGJ_CHAR_008', 'BGJ_CHAR_007'][index];
+    assert.equal(productionMetadata[id].audited, false);
+    entity.emit('targetFound');
+    assert.equal(a.ids.status.textContent, '识别成功');
+    assert.equal(a.ids.content.textContent, '内容暂未开放\n内容尚未审核');
+    assert.equal(entity.semanticContent.attributes.visible, false);
+    entity.emit('targetLost');
+    assert.equal(a.ids.content.textContent, '请将角色卡放回画面。');
+  }
+  const csv = await a.csv();
+  assert.equal(csv.split('\n').filter(row => row.includes(',semantic_gate_block,')).length, 3);
+  assert.ok(!csv.includes(',semantic_gate_pass,'));
+  assert.ok(csv.includes(',audited_not_true'));
+});
+
+test('each gate flag rejects false, missing, null, strings and numeric truthy values', async () => {
+  for (const field of ['audited', 'version_matched', 'resource_valid']) {
+    for (const value of [false, undefined, null, 'true', 'false', 1]) {
+      const metadata = allowedFixture();
+      if (value === undefined) delete metadata.BGJ_CHAR_006[field];
+      else metadata.BGJ_CHAR_006[field] = value;
+      const a = await app({ metadata }); a.ready(); a.scene.entities[0].emit('targetFound');
+      assert.ok(a.ids.content.textContent.startsWith('内容暂未开放'), `${field}=${value}`);
+      assert.equal(a.scene.entities[0].semanticContent.attributes.visible, false);
+      assert.ok((await a.csv()).includes(`${field}_not_true`));
+    }
+  }
+});
+
+test('a missing role, mismatched identity or invalid content fails closed despite all flags true', async () => {
+  for (const mutate of [
+    data => delete data.BGJ_CHAR_006,
+    data => data.BGJ_CHAR_006 = [],
+    data => data.BGJ_CHAR_006.id = 'BGJ_CHAR_008',
+    data => data.BGJ_CHAR_006.targetIndex = 1,
+    data => data.BGJ_CHAR_006.title = '崔云龙',
+    data => data.BGJ_CHAR_006.target = 'old.mind',
+    data => data.BGJ_CHAR_006.description = '',
+    data => data.BGJ_CHAR_006.description = 42
+  ]) {
+    const metadata = allowedFixture(); mutate(metadata);
+    const a = await app({ metadata }); a.ready(); a.scene.entities[0].emit('targetFound');
+    assert.ok(a.ids.content.textContent.startsWith('内容暂未开放'));
+    assert.equal(a.scene.entities[0].semanticContent.attributes.visible, false);
+    assert.ok(!(await a.csv()).includes(',semantic_gate_pass,'));
+  }
+});
+
+test('unavailable or malformed metadata preserves recognition and blocks delivery', async () => {
+  for (const options of [{ metadataFail: true }, { metadataText: '{bad' }, { metadataText: '[]' }, { metadataText: 'null' }]) {
+    const a = await app(options);
+    assert.equal(a.ids.status.textContent, '资源已就绪');
+    a.ready(); a.scene.entities[0].emit('targetFound');
+    assert.equal(a.ids.status.textContent, '识别成功');
+    assert.equal(a.ids.content.textContent, '内容暂未开放\n内容数据暂时不可用');
+    const csv = await a.csv();
+    assert.ok(csv.includes(',target_found,'));
+    assert.ok(csv.includes(',semantic_metadata_error,'));
+    assert.ok(csv.includes(',semantic_gate_block,'));
+  }
+});
+
+test('metadata download timeout still allows camera startup with delivery blocked', async () => {
+  const a = await app({ metadataTimeout: true });
+  [...a.timers.values()].find(timer => timer.ms === 15000).callback();
+  await new Promise(setImmediate);
+  assert.equal(a.ids.status.textContent, '资源已就绪');
+  a.ready(); a.scene.entities[0].emit('targetFound');
+  assert.equal(a.ids.content.textContent, '内容暂未开放\n内容数据暂时不可用');
+});
+
+test('switching from allowed to blocked content hides old layers and tolerates a late loss', async () => {
+  const metadata = allowedFixture(); metadata.BGJ_CHAR_008.audited = false;
+  const a = await app({ metadata }); a.ready();
+  a.scene.entities[0].emit('targetFound');
+  assert.equal(a.scene.entities[0].semanticContent.attributes.visible, true);
+  a.scene.entities[1].emit('targetFound');
+  assert.equal(a.scene.entities[0].semanticContent.attributes.visible, false);
+  assert.equal(a.scene.entities[1].semanticContent.attributes.visible, false);
+  a.scene.entities[0].emit('targetLost');
+  assert.equal(a.ids.content.textContent, '内容暂未开放\n内容尚未审核');
+  a.scene.entities[1].emit('targetLost');
+  assert.equal(a.ids.content.textContent, '请将角色卡放回画面。');
+});
+
+test('HTML starts every cultural AR layer hidden before any target event', () => {
+  assert.equal([...html.matchAll(/data-semantic-content visible="false"/g)].length, 3);
 });
 
 test('a failed primary CDN falls back for both libraries', async () => {

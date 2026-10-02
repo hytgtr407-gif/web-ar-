@@ -1,0 +1,14 @@
+---
+title: Semantic Gate Architecture for Verified Cultural Content Delivery
+---
+flowchart TD
+  card["Physical Comic Card"] --> recognition["WebAR Recognition Layer: A-Frame + MindAR"]
+  recognition -->|"targetFound"| mapping["targetIndex → character ID"]
+  mapping --> metadata["Lookup preloaded record from assets/data/scene.json"]
+  metadata --> validRecord{"Record readable, identity matched and description valid?"}
+  validRecord -->|"Yes"| gate{"audited ∧ version_matched ∧ resource_valid, all strictly true?"}
+  validRecord -->|"No"| blocked["Block text and AR content; record reason"]
+  gate -->|"No"| blocked
+  gate -->|"Yes"| allowed["Display validated text and AR content"]
+  recognition -->|"targetLost"| fallback["Clear text, hide AR content, prompt rescan"]
+  fallback --> recognition

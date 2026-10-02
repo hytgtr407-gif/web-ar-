@@ -32,7 +32,7 @@
       background: #000c; color: #afffc7; border-radius: 8px;
       font: 12px/1.6 ui-monospace, monospace; white-space: pre-wrap; pointer-events: none; }
   </style>
-  <script src="./assets/app.js?v=target-map-20261002" defer></script>
+  <script src="./assets/app.js?v=semantic-gate-20261002" defer></script>
 </head>
 <body>
   <main id="ar-container" aria-label="AR相机画面"></main>
@@ -61,13 +61,19 @@
       device-orientation-permission-ui="enabled: false">
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
       <a-entity id="target0" mindar-image-target="targetIndex: 0">
-        <a-plane width="1" height="1.382" position="0 0 0.01" material="color: #d4af37; opacity: 0.25; transparent: true"></a-plane>
+        <a-entity data-semantic-content visible="false">
+          <a-plane width="1" height="1.382" position="0 0 0.01" material="color: #d4af37; opacity: 0.25; transparent: true"></a-plane>
+        </a-entity>
       </a-entity>
       <a-entity id="target1" mindar-image-target="targetIndex: 1">
-        <a-plane width="1" height="1.370" position="0 0 0.01" material="color: #d4af37; opacity: 0.25; transparent: true"></a-plane>
+        <a-entity data-semantic-content visible="false">
+          <a-plane width="1" height="1.370" position="0 0 0.01" material="color: #d4af37; opacity: 0.25; transparent: true"></a-plane>
+        </a-entity>
       </a-entity>
       <a-entity id="target2" mindar-image-target="targetIndex: 2">
-        <a-plane width="1" height="1.459" position="0 0 0.01" material="color: #d4af37; opacity: 0.25; transparent: true"></a-plane>
+        <a-entity data-semantic-content visible="false">
+          <a-plane width="1" height="1.459" position="0 0 0.01" material="color: #d4af37; opacity: 0.25; transparent: true"></a-plane>
+        </a-entity>
       </a-entity>
     </a-scene>
   </template>

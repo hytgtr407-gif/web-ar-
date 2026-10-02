@@ -4,9 +4,16 @@
   // Order verified from grayscale tracking images inside bgji_targets.mind v2.
   // Never infer compiler order from filenames, character IDs or the DOM order.
   const CHARACTERS_BY_TARGET_INDEX = Object.freeze({
-    0: { id: 'BGJ_CHAR_006', name: '边一笑', desc: '《贬官记》人物卡：边一笑' },
-    1: { id: 'BGJ_CHAR_008', name: '崔云龙', desc: '《贬官记》人物卡：崔云龙' },
-    2: { id: 'BGJ_CHAR_007', name: '张岫玉', desc: '《贬官记》人物卡：张岫玉' }
+    0: { id: 'BGJ_CHAR_006', name: '边一笑' },
+    1: { id: 'BGJ_CHAR_008', name: '崔云龙' },
+    2: { id: 'BGJ_CHAR_007', name: '张岫玉' }
+  });
+  const TARGET_SOURCE = 'assets/targets/bgji_targets.mind';
+  const GATE_MESSAGES = Object.freeze({
+    unknown_target: '卡片尚未配置', metadata_unavailable: '内容数据暂时不可用',
+    missing_record: '缺少对应内容', identity_mismatch: '内容与卡片不匹配',
+    invalid_content: '内容数据不完整', audited_not_true: '内容尚未审核',
+    version_matched_not_true: '内容版本尚未确认匹配', resource_valid_not_true: '内容资源尚未确认有效'
   });
   const LIBRARIES = [
     { name: 'A-Frame 1.5.0', urls: [
@@ -37,19 +44,65 @@
   let lastTargetIndex = null;
   let lastEvent = '等待识别';
   let failure = '';
+  let sceneMetadata = null;
+  let metadataError = '';
+  let activeTargetIndex = null;
+  let gateState = '等待识别';
+  let gateReasons = [];
 
   function updateDebug() {
     const character = CHARACTERS_BY_TARGET_INDEX[lastTargetIndex];
     debug.textContent = `targetIndex: ${lastTargetIndex ?? '—'}\n` +
       `event: ${lastEvent}\n角色: ${character?.name ?? '—'} (${character?.id ?? '—'})\n` +
       `阶段: ${phase}\n目标文件: assets/targets/bgji_targets.mind\n` +
-      '映射: 0=边一笑 | 1=崔云龙 | 2=张岫玉' + (failure ? `\n错误: ${failure}` : '');
+      '映射: 0=边一笑 | 1=崔云龙 | 2=张岫玉' +
+      `\nSemantic Gate: ${gateState}` + (gateReasons.length ? ` (${gateReasons.join(';')})` : '') +
+      (metadataError ? `\n语义数据: ${metadataError}` : '') + (failure ? `\n错误: ${failure}` : '');
   }
 
-  function logEvent(event, index = null) {
+  function logEvent(event, index = null, reason = '') {
     logs.push({ user_id: userID, target_id: CHARACTERS_BY_TARGET_INDEX[index]?.id ?? '',
       target_index: index ?? '', event, timestamp: new Date().toISOString(),
-      elapsed_ms: Date.now() - sessionStart });
+      elapsed_ms: Date.now() - sessionStart, reason });
+  }
+
+  function setContentVisibility(entity, visible) {
+    entity.querySelector('[data-semantic-content]')?.setAttribute('visible', visible);
+  }
+
+  function hideAllContents() {
+    scene?.querySelectorAll('[mindar-image-target]').forEach(entity => setContentVisibility(entity, false));
+  }
+
+  // These flags are metadata declarations, not an independent cultural audit.
+  function semanticGateCheck(index) {
+    const character = CHARACTERS_BY_TARGET_INDEX[index];
+    if (!character) return { passed: false, reasons: ['unknown_target'] };
+    if (!sceneMetadata) return { passed: false, reasons: ['metadata_unavailable'] };
+    const record = Object.hasOwn(sceneMetadata, character.id) ? sceneMetadata[character.id] : null;
+    if (!record || typeof record !== 'object' || Array.isArray(record)) {
+      return { passed: false, reasons: ['missing_record'] };
+    }
+    const reasons = [];
+    if (record.id !== character.id || record.targetIndex !== index ||
+        record.title !== character.name || record.target !== TARGET_SOURCE) reasons.push('identity_mismatch');
+    if (typeof record.description !== 'string' || !record.description.trim()) reasons.push('invalid_content');
+    for (const field of ['audited', 'version_matched', 'resource_valid']) {
+      if (record[field] !== true) reasons.push(`${field}_not_true`);
+    }
+    return { passed: reasons.length === 0, reasons, record };
+  }
+
+  async function loadSceneMetadata() {
+    try {
+      const bytes = await fetchWithTimeout(new URL('./assets/data/scene.json', document.baseURI), 15000, 'no-cache');
+      const data = JSON.parse(new TextDecoder().decode(bytes));
+      if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('JSON 顶层必须是角色字典');
+      sceneMetadata = data;
+    } catch (error) {
+      metadataError = error.message;
+      logEvent('semantic_metadata_error', null, 'metadata_unavailable');
+    }
   }
 
   function releaseCamera() {
@@ -68,6 +121,9 @@
   function fail(message) {
     if (phase === 'failed') return;
     phase = 'failed';
+    hideAllContents();
+    activeTargetIndex = null;
+    gateState = '运行中断';
     failure = message;
     clearTimeout(startupTimer);
     status.textContent = '启动或运行失败';
@@ -80,11 +136,11 @@
     updateDebug();
   }
 
-  async function fetchWithTimeout(url, timeoutMs) {
+  async function fetchWithTimeout(url, timeoutMs, cache = 'default') {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const response = await fetch(url, { signal: controller.signal });
+      const response = await fetch(url, { signal: controller.signal, cache });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.arrayBuffer();
       if (!data.byteLength) throw new Error('文件为空');
@@ -125,12 +181,12 @@
       const libraries = (async () => {
         for (const library of LIBRARIES) await loadLibrary(library);
       })();
-      const [bytes] = await Promise.all([targets, libraries]);
+      const [bytes] = await Promise.all([targets, libraries, loadSceneMetadata()]);
       if (phase === 'failed') return;
       targetURL = URL.createObjectURL(new Blob([bytes], { type: 'application/octet-stream' }));
       phase = 'prepared';
       status.textContent = '资源已就绪';
-      help.textContent = '点击启动，并允许使用后置相机。';
+      help.textContent = metadataError ? '内容数据暂时不可用；仍可启动相机，内容展示将暂停。' : '点击启动，并允许使用后置相机。';
       startButton.disabled = false;
       startButton.textContent = '启动相机';
       updateDebug();
@@ -145,17 +201,33 @@
     lastTargetIndex = index;
     lastEvent = event.type;
     const character = CHARACTERS_BY_TARGET_INDEX[index];
-    if (!character) {
-      status.textContent = '识别到未配置卡片';
-      content.textContent = `未知 targetIndex: ${index}`;
-    } else if (event.type === 'targetFound') {
-      status.textContent = '识别成功';
-      content.textContent = `${character.name}\n${character.desc}`;
+    if (event.type === 'targetFound') {
+      hideAllContents();
+      activeTargetIndex = index;
+      status.textContent = character ? '识别成功' : '识别到未配置卡片';
       logEvent('target_found', index);
+      const result = semanticGateCheck(index);
+      gateReasons = result.reasons;
+      gateState = result.passed ? '放行' : '拦截';
+      if (result.passed) {
+        content.textContent = `${result.record.title}\n${result.record.description}`;
+        setContentVisibility(event.currentTarget, true);
+        logEvent('semantic_gate_pass', index);
+      } else {
+        content.textContent = '内容暂未开放\n' + result.reasons.map(reason => GATE_MESSAGES[reason]).join('；');
+        logEvent('semantic_gate_block', index, result.reasons.join(';'));
+      }
     } else {
-      status.textContent = '卡片已离开画面';
-      content.textContent = '请将角色卡放回画面。';
+      setContentVisibility(event.currentTarget, false);
       logEvent('target_lost', index);
+      // A late loss from the previous anchor must not erase a newly found card.
+      if (activeTargetIndex === index) {
+        activeTargetIndex = null;
+        status.textContent = '卡片已离开画面';
+        content.textContent = '请将角色卡放回画面。';
+        gateState = '等待识别';
+        gateReasons = [];
+      }
     }
     updateDebug();
   }
@@ -215,7 +287,7 @@
 
   startButton.addEventListener('click', startAR);
   document.getElementById('export').addEventListener('click', () => {
-    const columns = ['user_id', 'target_id', 'target_index', 'event', 'timestamp', 'elapsed_ms'];
+    const columns = ['user_id', 'target_id', 'target_index', 'event', 'timestamp', 'elapsed_ms', 'reason'];
     const rows = logs.map(log => columns.map(column => log[column]).join(','));
     const url = URL.createObjectURL(new Blob(['\uFEFF' + columns.join(',') + '\n' + rows.join('\n')], { type: 'text/csv;charset=utf-8' }));
     const link = document.createElement('a');
