@@ -1,116 +1,75 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>《贬官记》WebAR阅读系统</title>
-
-<script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
-
-<style>
-#info{
-position:fixed;
-top:15px;
-right:15px;
-z-index:999;
-background:#10251fdd;
-color:#f5dfaa;
-border:1px solid #c9a85c;
-padding:15px;
-border-radius:12px;
-font-family:serif;
-width:230px;
-}
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#10251f">
+  <title>《贬官记》WebAR阅读系统</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; }
+    body { background: #10251f; color: #f5dfaa; font-family: system-ui, sans-serif; }
+    #ar-container { position: fixed; inset: 0; overflow: hidden; isolation: isolate; }
+    /* MindAR gives video a negative z-index; keep it above the page background. */
+    #ar-container > video { z-index: 0 !important; }
+    #ar-container > a-scene { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; }
+    #info { position: fixed; top: max(12px, env(safe-area-inset-top)); right: 12px;
+      z-index: 10; width: min(300px, calc(100vw - 24px)); max-height: 55vh;
+      overflow: auto; background: #10251fee; border: 1px solid #c9a85c;
+      padding: 14px; border-radius: 12px; }
+    h1 { font-size: 19px; margin: 0 0 10px; }
+    #status { font-weight: 600; }
+    #help, #content { font-size: 14px; line-height: 1.6; margin-top: 8px; }
+    #content { white-space: pre-line; }
+    #actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    button { min-height: 44px; padding: 8px 12px; border: 1px solid #c9a85c;
+      border-radius: 6px; background: #f5dfaa; color: #10251f; cursor: pointer; }
+    button:disabled { opacity: .6; cursor: wait; }
+    #debug-overlay { position: fixed; left: 12px; right: 12px;
+      bottom: max(12px, env(safe-area-inset-bottom)); z-index: 10;
+      max-height: 30vh; overflow: auto; margin: 0; padding: 10px;
+      background: #000c; color: #afffc7; border-radius: 8px;
+      font: 12px/1.6 ui-monospace, monospace; white-space: pre-wrap; pointer-events: none; }
+  </style>
+  <script src="./assets/app.js?v=target-map-20261002" defer></script>
 </head>
-
 <body>
-
-<div id="info">
-<h3>《贬官记》AR阅读</h3>
-<div id="status">正在启动相机...</div>
-<div id="content">等待识别角色卡</div><button onclick="exportLogs()">导出实验日志</button>
-</div>
-
-<a-scene
-mindar-image="imageTargetSrc: ./assets/targets/bgji_targets.mind; autoStart: true;"
-color-space="sRGB"
-renderer="colorManagement: true, physicallyCorrectLights"
-vr-mode-ui="enabled:false"
-device-orientation-permission-ui="enabled:false">
-
-<a-camera position="0 0 0" look-controls="enabled:false"></a-camera>
-
-<a-entity mindar-image-target="targetIndex:0" id="target0">
-<a-plane
-position="0 0 0"
-width="1"
-height="1.4"
-material="color:#d4af37; opacity:0.25">
-</a-plane>
-</a-entity>
-
-<a-entity mindar-image-target="targetIndex:1" id="target1">
-</a-entity>
-
-<a-entity mindar-image-target="targetIndex:2" id="target2">
-</a-entity>
-
-</a-scene>
-
-<script>
-
-
-const data=[
-{id:"BGJ_CHAR_007",name:"张岫玉",desc:"《贬官记》人物卡：张岫玉"},
-{id:"BGJ_CHAR_008",name:"崔云龙",desc:"《贬官记》人物卡：崔云龙"},
-{id:"BGJ_CHAR_006",name:"边一笑",desc:"《贬官记》人物卡：边一笑"}
-];
-
-const logs=[];
-const userID="anonymous_"+Math.random().toString(36).substring(2,8);
-const sessionStart=Date.now();
-
-function logEvent(eventName,targetID){
- const log={
-  user_id:userID,
-  target_id:targetID,
-  event:eventName,
-  timestamp:new Date().toISOString(),
-  elapsed_ms:Date.now()-sessionStart
- };
- logs.push(log);
- console.log(log);
-}
-
-function show(i){
- document.querySelector("#status").innerHTML="识别成功";
- document.querySelector("#content").innerHTML=data[i].name+"<br>"+data[i].desc;
- logEvent("target_found",data[i].id);
-}
-
-target0.addEventListener("targetFound",()=>show(2));
-target1.addEventListener("targetFound",()=>show(0));
-target2.addEventListener("targetFound",()=>show(1));
-
-target0.addEventListener("targetLost",()=>logEvent("target_lost","BGJ_CHAR_008"));
-target1.addEventListener("targetLost",()=>logEvent("target_lost","BGJ_CHAR_007"));
-target2.addEventListener("targetLost",()=>logEvent("target_lost","BGJ_CHAR_006"));
-
-function exportLogs(){
- let csv="user_id,target_id,event,timestamp,elapsed_ms\n";
- logs.forEach(l=>{
-  csv+=`${l.user_id},${l.target_id},${l.event},${l.timestamp},${l.elapsed_ms}\n`;
- });
- let blob=new Blob([csv],{type:"text/csv"});
- let url=URL.createObjectURL(blob);
- let a=document.createElement("a");
- a.href=url;
- a.download="AR_interaction_logs.csv";
- a.click();
-}
-</script>
-
+  <main id="ar-container" aria-label="AR相机画面"></main>
+  <section id="info">
+    <h1>《贬官记》AR阅读</h1>
+    <div id="status" role="status" aria-live="polite">正在加载识别资源…</div>
+    <div id="help">首次加载需要下载约 2.5 MB 的卡片数据，请保持网络连接。</div>
+    <div id="content">等待识别角色卡</div>
+    <div id="actions">
+      <button id="start" type="button" disabled>正在准备…</button>
+      <button id="export" type="button">导出实验日志</button>
+      <button id="debug-toggle" type="button" aria-controls="debug-overlay" aria-pressed="true">隐藏调试</button>
+    </div>
+    <noscript>请启用 JavaScript 后重新打开页面。</noscript>
+  </section>
+  <pre id="debug-overlay" aria-label="MindAR调试信息">targetIndex: —
+等待 MindAR 初始化</pre>
+  <!-- Instantiate only after both libraries register, avoiding cached-script races. -->
+  <template id="ar-template">
+    <a-scene embedded
+      mindar-image="autoStart: false; maxTrack: 1; uiLoading: no; uiScanning: no; uiError: no;"
+      color-space="sRGB"
+      renderer="alpha: true; antialias: false; precision: medium; colorManagement: true"
+      loading-screen="enabled: false"
+      xr-mode-ui="enabled: false"
+      device-orientation-permission-ui="enabled: false">
+      <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+      <a-entity id="target0" mindar-image-target="targetIndex: 0">
+        <a-plane width="1" height="1.382" position="0 0 0.01" material="color: #d4af37; opacity: 0.25; transparent: true"></a-plane>
+      </a-entity>
+      <a-entity id="target1" mindar-image-target="targetIndex: 1">
+        <a-plane width="1" height="1.370" position="0 0 0.01" material="color: #d4af37; opacity: 0.25; transparent: true"></a-plane>
+      </a-entity>
+      <a-entity id="target2" mindar-image-target="targetIndex: 2">
+        <a-plane width="1" height="1.459" position="0 0 0.01" material="color: #d4af37; opacity: 0.25; transparent: true"></a-plane>
+      </a-entity>
+    </a-scene>
+  </template>
 </body>
 </html>
