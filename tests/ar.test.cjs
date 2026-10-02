@@ -8,6 +8,7 @@ const root = path.join(__dirname, '..');
 const source = fs.readFileSync(path.join(root, 'assets/app.js'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const productionMetadata = JSON.parse(fs.readFileSync(path.join(root, 'assets/data/scene.json'), 'utf8'));
+const studyMetadata = JSON.parse(fs.readFileSync(path.join(root, 'assets/data/study-scene.json'), 'utf8'));
 function allowedFixture() {
   const data = structuredClone(productionMetadata);
   for (const record of Object.values(data)) record.audited = true;
@@ -26,6 +27,10 @@ class Element {
 
 async function app(options = {}) {
   const ids = Object.fromEntries(['status', 'help', 'content', 'start', 'debug-overlay', 'debug-toggle', 'ar-container', 'export', 'ar-template'].map(id => [id, new Element()]));
+  if (options.studyPreview) {
+    ids['study-notice'] = new Element();
+    ids['study-notice'].dataset = { studyVersion: 'bgj-study-v1' };
+  }
   const requests = [];
   const timers = new Map();
   const blobs = new Map();
@@ -82,10 +87,10 @@ async function app(options = {}) {
     clearTimeout: id => timers.delete(id),
     fetch: async (url, init) => {
       url = String(url); requests.push(url);
-      if (url.endsWith('/assets/data/scene.json')) {
+      if (url.endsWith('/assets/data/scene.json') || url.endsWith('/assets/data/study-scene.json')) {
         if (options.metadataTimeout) return new Promise((resolve, reject) => init.signal.addEventListener('abort', () => reject(new Error('Timeout')), { once: true }));
         return { ok: !options.metadataFail, status: options.metadataFail ? 404 : 200,
-          arrayBuffer: async () => Buffer.from(options.metadataText ?? JSON.stringify(options.metadata ?? productionMetadata)) };
+          arrayBuffer: async () => Buffer.from(options.metadataText ?? JSON.stringify(options.metadata ?? (options.studyPreview ? studyMetadata : productionMetadata))) };
       }
       if (options.primaryFail && url.includes('cdn.jsdelivr.net')) throw new Error('CDN unreachable');
       const bad = options.targetFail && url.endsWith('.mind');
@@ -299,4 +304,60 @@ test('debug defaults to visible, can be hidden by query and toggled back on', as
   assert.equal(a.ids['debug-overlay'].hidden, true);
   a.ids['debug-toggle'].click();
   assert.equal(a.ids['debug-overlay'].hidden, false);
+});
+
+test('research preview shows three unaudited drafts without logging audited gate passes and clears on loss', async () => {
+  const a = await app({ studyPreview: true }); a.ready();
+  assert.ok(a.requests.includes('https://example.github.io/web-ar-/assets/data/study-scene.json'));
+  for (const entity of a.scene.entities) {
+    entity.emit('targetFound');
+    assert.equal(entity.semanticContent.attributes.visible, true);
+    assert.ok(a.ids.content.textContent.includes('文化说明待专家审核'));
+    assert.ok(a.ids['debug-overlay'].textContent.includes('Semantic Gate: 拦截'));
+    entity.emit('targetLost');
+    assert.equal(entity.semanticContent.attributes.visible, false);
+    assert.equal(a.ids.content.textContent, '请将角色卡放回画面。');
+  }
+  const csv = await a.csv();
+  assert.equal(csv.split('\n').filter(row => row.includes(',research_preview_display,')).length, 3);
+  assert.equal(csv.split('\n').filter(row => row.includes(',semantic_gate_block,')).length, 3);
+  assert.ok(!csv.includes(',semantic_gate_pass,'));
+  assert.ok(csv.includes(',research_preview,bgj-study-v1'));
+  assert.ok(csv.includes('study_mode,content_version'));
+});
+
+test('query parameters and study data cannot open preview content in the production entry', async () => {
+  const a = await app({ metadata: studyMetadata, search: '?study=1&preview=true' }); a.ready();
+  for (const entity of a.scene.entities) {
+    entity.emit('targetFound');
+    assert.equal(entity.semanticContent.attributes.visible, false);
+  }
+  assert.ok(!(await a.csv()).includes(',research_preview_display,'));
+});
+
+test('research preview still blocks invalid identity, resources, versions, missing sources and malformed audit flags', async () => {
+  for (const mutate of [
+    r => r.id = 'BGJ_CHAR_008', r => r.targetIndex = 2,
+    r => r.version_matched = false, r => r.resource_valid = false,
+    r => r.audited = 'false', r => delete r.audited,
+    r => r.description = '', r => r.sources = [],
+    r => r.sources = ['https://bad.example/a,inject'],
+    r => r.content_version = 'old', r => r.research_preview = false
+  ]) {
+    const metadata = structuredClone(studyMetadata); mutate(metadata.BGJ_CHAR_006);
+    const a = await app({ studyPreview: true, metadata }); a.ready();
+    a.scene.entities[0].emit('targetFound');
+    assert.equal(a.scene.entities[0].semanticContent.attributes.visible, false);
+    assert.ok(!(await a.csv()).includes(',research_preview_display,'));
+  }
+});
+
+test('a late loss does not erase a newly displayed research draft', async () => {
+  const a = await app({ studyPreview: true }); a.ready();
+  a.scene.entities[0].emit('targetFound');
+  a.scene.entities[1].emit('targetFound');
+  a.scene.entities[0].emit('targetLost');
+  assert.ok(a.ids.content.textContent.startsWith('崔云龙'));
+  assert.equal(a.scene.entities[0].semanticContent.attributes.visible, false);
+  assert.equal(a.scene.entities[1].semanticContent.attributes.visible, true);
 });

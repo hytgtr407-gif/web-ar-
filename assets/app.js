@@ -32,6 +32,10 @@
   const debug = document.getElementById('debug-overlay');
   const debugToggle = document.getElementById('debug-toggle');
   const container = document.getElementById('ar-container');
+  // Explicit study entry only. Query parameters cannot enable this exception.
+  const studyVersion = document.getElementById('study-notice')?.dataset?.studyVersion ?? '';
+  const isStudyPreview = studyVersion === 'bgj-study-v1';
+  const metadataSource = isStudyPreview ? './assets/data/study-scene.json' : './assets/data/scene.json';
   const logs = [];
   const disposedControllers = new WeakSet();
   const userID = 'anonymous_' + Math.random().toString(36).slice(2, 8);
@@ -57,13 +61,16 @@
       `阶段: ${phase}\n目标文件: assets/targets/bgji_targets.mind\n` +
       '映射: 0=边一笑 | 1=崔云龙 | 2=张岫玉' +
       `\nSemantic Gate: ${gateState}` + (gateReasons.length ? ` (${gateReasons.join(';')})` : '') +
+      (isStudyPreview ? `\n研究预览: ${studyVersion}，文化内容待专家审核` : '') +
       (metadataError ? `\n语义数据: ${metadataError}` : '') + (failure ? `\n错误: ${failure}` : '');
   }
 
   function logEvent(event, index = null, reason = '') {
     logs.push({ user_id: userID, target_id: CHARACTERS_BY_TARGET_INDEX[index]?.id ?? '',
       target_index: index ?? '', event, timestamp: new Date().toISOString(),
-      elapsed_ms: Date.now() - sessionStart, reason });
+      elapsed_ms: Date.now() - sessionStart, reason,
+      study_mode: isStudyPreview ? 'research_preview' : 'production',
+      content_version: isStudyPreview ? studyVersion : '' });
   }
 
   function setContentVisibility(entity, visible) {
@@ -95,7 +102,7 @@
 
   async function loadSceneMetadata() {
     try {
-      const bytes = await fetchWithTimeout(new URL('./assets/data/scene.json', document.baseURI), 15000, 'no-cache');
+      const bytes = await fetchWithTimeout(new URL(metadataSource, document.baseURI), 15000, 'no-cache');
       const data = JSON.parse(new TextDecoder().decode(bytes));
       if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('JSON 顶层必须是角色字典');
       sceneMetadata = data;
@@ -214,8 +221,22 @@
         setContentVisibility(event.currentTarget, true);
         logEvent('semantic_gate_pass', index);
       } else {
-        content.textContent = '内容暂未开放\n' + result.reasons.map(reason => GATE_MESSAGES[reason]).join('；');
         logEvent('semantic_gate_block', index, result.reasons.join(';'));
+        // An explicitly labelled research preview is not an audited gate pass.
+        // Keep identity, version, resource and metadata failures fail-closed.
+        const record = result.record;
+        const previewAllowed = isStudyPreview && result.reasons.length === 1 &&
+          result.reasons[0] === 'audited_not_true' && record?.audited === false &&
+          record.research_preview === true && record.content_version === studyVersion &&
+          Array.isArray(record.sources) && record.sources.length > 0 &&
+          record.sources.every(url => typeof url === 'string' && /^https:\/\/[^\s,]+$/.test(url));
+        if (previewAllowed) {
+          content.textContent = `${record.title}\n${record.description}\n研究预览 · 文化说明待专家审核`;
+          setContentVisibility(event.currentTarget, true);
+          logEvent('research_preview_display', index, 'expert_review_pending');
+        } else {
+          content.textContent = '内容暂未开放\n' + result.reasons.map(reason => GATE_MESSAGES[reason]).join('；');
+        }
       }
     } else {
       setContentVisibility(event.currentTarget, false);
@@ -287,7 +308,7 @@
 
   startButton.addEventListener('click', startAR);
   document.getElementById('export').addEventListener('click', () => {
-    const columns = ['user_id', 'target_id', 'target_index', 'event', 'timestamp', 'elapsed_ms', 'reason'];
+    const columns = ['user_id', 'target_id', 'target_index', 'event', 'timestamp', 'elapsed_ms', 'reason', 'study_mode', 'content_version'];
     const rows = logs.map(log => columns.map(column => log[column]).join(','));
     const url = URL.createObjectURL(new Blob(['\uFEFF' + columns.join(',') + '\n' + rows.join('\n')], { type: 'text/csv;charset=utf-8' }));
     const link = document.createElement('a');
@@ -298,7 +319,7 @@
     link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   });
-  debug.hidden = new URLSearchParams(window.location.search).get('debug') === '0';
+  debug.hidden = isStudyPreview || new URLSearchParams(window.location.search).get('debug') === '0';
   function updateDebugButton() {
     debugToggle.textContent = debug.hidden ? '显示调试' : '隐藏调试';
     debugToggle.setAttribute('aria-pressed', String(!debug.hidden));

@@ -54,6 +54,16 @@ CSV 保留 `target_found` / `target_lost`，增加 `semantic_gate_pass` / `seman
 
 ## 验证
 
+## 用户体验研究预览（2026-10-03）
+
+用户研究入口为 [`study.html`](study.html)，内容版本 `bgj-study-v1`。该入口展示有公开资料依据、尚待专家审核的三人物短介绍，页面持续提示研究预览状态。正式入口的严格门控保留，正式审核状态没有改为已通过。
+
+研究例外展示另记 `research_preview_display`，不会计为 `semantic_gate_pass`；日志增加研究模式及内容版本。预测试后可先开展操作、AR 体验和感知学习支持评价，再把论文与资料整体交老师审核；不宣称用户研究验证了文化真实性或客观学习增长。细节、来源与修改后的适用范围见 [`docs/research-preview.md`](docs/research-preview.md)。
+
+当前回归测试共 22 项，新增预览显示、严格异常拦截、正式入口隔离及追踪丢失清理检查。此前提交的 18 项结果属于当时版本。
+
+## 检查与手机复测
+
 需要 Node.js 18+，无需安装依赖：
 
 ```sh
