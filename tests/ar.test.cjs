@@ -20,16 +20,19 @@ class Element {
   addEventListener(type, callback) { (this.listeners[type] ??= []).push(callback); }
   emit(type, fields = {}) { for (const callback of this.listeners[type] ?? []) callback({ type, target: this, currentTarget: this, ...fields }); }
   setAttribute(key, value) { this.attributes[key] = value; }
-  appendChild(child) { this.child = child; }
+  removeAttribute(key) { delete this.attributes[key]; }
+  replaceChildren() { this.children = []; this.child = undefined; }
+  appendChild(child) { this.child = child; (this.children ??= []).push(child); }
   remove() { this.removed = true; }
   click() { this.emit('click'); }
 }
 
 async function app(options = {}) {
-  const ids = Object.fromEntries(['status', 'help', 'content', 'start', 'debug-overlay', 'debug-toggle', 'ar-container', 'export', 'ar-template'].map(id => [id, new Element()]));
+  const ids = Object.fromEntries(['status', 'help', 'content', 'start', 'debug-overlay', 'debug-toggle', 'ar-container', 'export', 'ar-template', 'review-status', 'sources', 'scan-progress', 'guide', 'info', 'session-code'].map(id => [id, new Element()]));
+  ids.guide.setAttribute('open', '');
   if (options.studyPreview) {
     ids['study-notice'] = new Element();
-    ids['study-notice'].dataset = { studyVersion: 'bgj-study-v1' };
+    ids['study-notice'].dataset = { studyVersion: options.studyVersion ?? 'bgj-study-v2' };
   }
   const requests = [];
   const timers = new Map();
@@ -42,7 +45,8 @@ async function app(options = {}) {
   let scene;
   const window = new Element();
   window.isSecureContext = options.secure ?? true;
-  window.location = { search: options.search ?? '', reload: () => reloads++ };
+  // Retain the original release-regression expectations under the explicit A condition.
+  window.location = { search: options.search ?? '?ui=A', reload: () => reloads++ };
   const document = new Element();
   document.baseURI = 'https://example.github.io/web-ar-/';
   document.getElementById = id => ids[id];
@@ -82,7 +86,7 @@ async function app(options = {}) {
   }
   vm.runInNewContext(source, {
     window, document, navigator: { mediaDevices: options.noCamera ? {} : { getUserMedia() {} } },
-    URL: TestURL, URLSearchParams, Blob, AbortController, TextDecoder, console: { warn() {} },
+    URL: TestURL, URLSearchParams, Blob, AbortController, TextDecoder, performance, console: { warn() {} },
     setTimeout: (callback, ms) => { const id = timers.size + 1; timers.set(id, { callback, ms }); return id; },
     clearTimeout: id => timers.delete(id),
     fetch: async (url, init) => {
@@ -299,17 +303,20 @@ test('unsupported contexts and cameras fail clearly before downloading libraries
   }
 });
 
-test('debug defaults to visible, can be hidden by query and toggled back on', async () => {
-  const a = await app({ search: '?debug=0' });
+test('debug defaults to hidden, can be opened explicitly and toggled', async () => {
+  const a = await app({ search: '' });
   assert.equal(a.ids['debug-overlay'].hidden, true);
   a.ids['debug-toggle'].click();
   assert.equal(a.ids['debug-overlay'].hidden, false);
+  const b = await app({ search: '?debug=1' });
+  assert.equal(b.ids['debug-overlay'].hidden, false);
 });
 
 test('research preview shows three unaudited drafts without logging audited gate passes and clears on loss', async () => {
   const a = await app({ studyPreview: true }); a.ready();
   assert.ok(a.requests.includes('https://example.github.io/web-ar-/assets/data/study-scene.json'));
   for (const entity of a.scene.entities) {
+    a.ids.info.scrollTop = 100;
     entity.emit('targetFound');
     assert.equal(entity.semanticContent.attributes.visible, true);
     assert.ok(a.ids.content.textContent.includes('文化说明待专家审核'));
@@ -322,7 +329,7 @@ test('research preview shows three unaudited drafts without logging audited gate
   assert.equal(csv.split('\n').filter(row => row.includes(',research_preview_display,')).length, 3);
   assert.equal(csv.split('\n').filter(row => row.includes(',semantic_gate_block,')).length, 3);
   assert.ok(!csv.includes(',semantic_gate_pass,'));
-  assert.ok(csv.includes(',research_preview,bgj-study-v1'));
+  assert.ok(csv.includes(',research_preview,bgj-study-v2'));
   assert.ok(csv.includes('study_mode,content_version'));
 });
 
@@ -360,4 +367,107 @@ test('a late loss does not erase a newly displayed research draft', async () => 
   assert.ok(a.ids.content.textContent.startsWith('崔云龙'));
   assert.equal(a.scene.entities[0].semanticContent.attributes.visible, false);
   assert.equal(a.scene.entities[1].semanticContent.attributes.visible, true);
+});
+
+test('B identifies each card while preserving formal blocking, then clears on loss', async () => {
+  const a = await app({ search: '' }); a.ready();
+  for (const [index, name] of ['边一笑', '崔云龙', '张岫玉'].entries()) {
+    const entity = a.scene.entities[index];
+    entity.emit('targetFound');
+    assert.equal(a.ids.status.textContent, `已识别：${name}`);
+    assert.ok(a.ids.content.textContent.includes('尚未完成专家审核，暂不展示'));
+    assert.equal(entity.semanticContent.attributes.visible, false);
+    assert.equal(a.ids.sources.hidden, true);
+    entity.emit('targetLost');
+    assert.equal(a.ids['review-status'].textContent, '当前未显示人物介绍');
+    assert.ok(a.ids.help.textContent.includes('放回镜头'));
+  }
+  assert.ok(a.ids['scan-progress'].textContent.startsWith('已识别 3/3'));
+  assert.ok(!(await a.csv()).includes(',semantic_gate_pass,'));
+});
+
+test('B shows labelled research drafts and sources, clears both, and reacquires without false gate passes', async () => {
+  const a = await app({ studyPreview: true, search: '' }); a.ready();
+  for (const entity of a.scene.entities) {
+    entity.emit('targetFound');
+    assert.ok(a.ids['review-status'].textContent.includes('尚未完成专家审核'));
+    assert.ok(a.ids.content.textContent.includes('人物关系：'));
+    assert.equal(entity.semanticContent.attributes.visible, true);
+    assert.equal(a.ids.sources.hidden, false);
+    const sourceLink = a.ids.sources.children[1];
+    assert.ok(sourceLink.href.startsWith('https://'));
+    sourceLink.click();
+    entity.emit('targetLost');
+    assert.equal(a.ids.sources.hidden, true);
+    assert.equal(a.ids.sources.children.length, 0);
+    assert.equal(entity.semanticContent.attributes.visible, false);
+    entity.emit('targetFound');
+    assert.equal(entity.semanticContent.attributes.visible, true);
+  }
+  assert.equal(a.ids.guide.attributes.open, undefined);
+  assert.equal(a.ids.info.attributes['data-scanning'], 'true');
+  const csv = await a.csv();
+  assert.ok(csv.includes(',research_preview_display,'));
+  assert.ok(csv.includes(',source_opened,'));
+  assert.ok(!csv.includes(',semantic_gate_pass,'));
+});
+
+test('B explains missing audit state without asserting that an audit is merely pending', async () => {
+  const metadata = allowedFixture(); delete metadata.BGJ_CHAR_006.audited;
+  const a = await app({ metadata, search: '' }); a.ready(); a.scene.entities[0].emit('targetFound');
+  assert.ok(a.ids.content.textContent.includes('无法确认人物介绍已完成审核'));
+  assert.ok(!a.ids.content.textContent.includes('尚未完成专家审核'));
+  assert.equal(a.scene.entities[0].semanticContent.attributes.visible, false);
+});
+
+test('B preserves the current draft and its sources after a late loss from another card', async () => {
+  const a = await app({ studyPreview: true, search: '' }); a.ready();
+  a.scene.entities[0].emit('targetFound');
+  a.scene.entities[1].emit('targetFound');
+  const text = a.ids.content.textContent;
+  a.ids.info.scrollTop = 100;
+  a.scene.entities[0].emit('targetLost');
+  assert.equal(a.ids.content.textContent, text);
+  assert.equal(a.ids.sources.hidden, false);
+  assert.equal(a.ids.status.textContent, '已识别：崔云龙');
+  assert.equal(a.ids.info.scrollTop, 100);
+  a.scene.entities[1].emit('targetLost');
+  assert.equal(a.ids.info.scrollTop, 0);
+});
+
+test('all conditions export session, interface and content versions without assuming task completion', async () => {
+  for (const search of ['', '?ui=A', '?ui=B', '?ui=invalid&preview=true']) {
+    const a = await app({ studyPreview: true, search }); a.ready();
+    a.scene.entities[0].emit('targetFound');
+    const csv = await a.csv();
+    const rows = csv.trim().replace(/^\uFEFF/, '').split('\n').map(row => row.split(','));
+    assert.ok(rows[0].includes('ui_variant'));
+    assert.ok(rows[0].includes('interface_version'));
+    const variant = search === '?ui=A' ? 'A' : 'B';
+    for (const row of rows.slice(1)) {
+      assert.equal(row[9], variant);
+      assert.equal(row[10], 'hci-experience-v2-20261004');
+      assert.ok(Number(row[5]) >= 0);
+      assert.equal(row[0], a.ids['session-code'].textContent);
+    }
+    assert.ok(csv.includes(',camera_start_requested,'));
+    assert.ok(!csv.includes('task_completed'));
+  }
+});
+
+test('stale preview version cannot display newly versioned draft content', async () => {
+  const a = await app({ studyPreview: true, studyVersion: 'bgj-study-v1', search: '' }); a.ready();
+  a.scene.entities[0].emit('targetFound');
+  assert.equal(a.scene.entities[0].semanticContent.attributes.visible, false);
+  assert.ok(!(await a.csv()).includes(',research_preview_display,'));
+});
+
+test('camera failure hides research content, sources and presentation state', async () => {
+  const a = await app({ studyPreview: true, search: '' }); a.ready();
+  a.scene.entities[0].emit('targetFound');
+  a.scene.emit('arError');
+  assert.equal(a.ids.sources.hidden, true);
+  assert.equal(a.ids['review-status'].textContent, '当前未显示人物介绍');
+  assert.equal(a.scene.entities[0].semanticContent.attributes.visible, false);
+  assert.equal(a.stops, 1);
 });

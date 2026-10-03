@@ -4,12 +4,12 @@
     "targetIndex": 1,
     "title": "崔云龙",
     "target": "assets/targets/bgji_targets.mind",
-    "description": "崔云龙是新科状元。他因边一笑的婚姻背景将其贬官，后以微服私访了解边一笑。在查案过程中的接触与碰撞，使他重新认识边一笑，也反省了自己先前的判断。",
+    "description": "崔云龙是新科状元，也是巡按。他起初因边一笑迎娶张岫玉而将其贬官，随后微服私访，了解边一笑的为人与办案。经过相处和查案，他重新认识边一笑，并反省先前的判断。\n人物关系：崔云龙与边一笑从误会、碰撞走向相互理解。",
     "audited": false,
     "version_matched": true,
     "resource_valid": true,
     "research_preview": true,
-    "content_version": "bgj-study-v1",
+    "content_version": "bgj-study-v2",
     "sources": [
       "https://www.fujian.gov.cn/zwgk/ztzl/sxzygwzxsgzx/sdjj/wvjj/202403/t20240327_6420206.htm",
       "https://www.chinawriter.com.cn/bk/2014-10-15/78297.html"
@@ -20,12 +20,12 @@
     "targetIndex": 2,
     "title": "张岫玉",
     "target": "assets/targets/bgji_targets.mind",
-    "description": "张岫玉是边一笑的妻子。她曾有青楼经历，这一背景与边一笑被贬官的情节相关。她理解并支持丈夫，崔云龙在重新认识边一笑后，也对她产生敬意。",
+    "description": "张岫玉是边一笑的妻子。剧中，她曾有青楼经历，这一背景成为边一笑被贬官的原因之一。剧评提到她对丈夫的理解，也描写了崔云龙在重新认识边一笑后对她的尊重。\n人物关系：张岫玉与边一笑为夫妻；她的经历与贬官情节相连。",
     "audited": false,
     "version_matched": true,
     "resource_valid": true,
     "research_preview": true,
-    "content_version": "bgj-study-v1",
+    "content_version": "bgj-study-v2",
     "sources": [
       "https://www.fujian.gov.cn/zwgk/ztzl/sxzygwzxsgzx/sdjj/wvjj/202403/t20240327_6420206.htm",
       "https://www.chinawriter.com.cn/bk/2014-10-15/78297.html"
@@ -36,12 +36,12 @@
     "targetIndex": 0,
     "title": "边一笑",
     "target": "assets/targets/bgji_targets.mind",
-    "description": "边一笑为官清廉、不畏权贵，却因迎娶张岫玉而被贬为县令。他到任后投入命案调查，并在与微服私访的崔云龙相处时，将对方误认为可以培养的学生。",
+    "description": "边一笑是一位清廉、不畏权贵的官员。他因迎娶张岫玉，从知府被贬为县令，到任后便投入命案调查。崔云龙微服进入衙中，边一笑一度把他当作可以培养的学生，两人在查案中不断碰撞。\n人物关系：张岫玉是他的妻子；崔云龙是贬官与查案情节中的关键人物。",
     "audited": false,
     "version_matched": true,
     "resource_valid": true,
     "research_preview": true,
-    "content_version": "bgj-study-v1",
+    "content_version": "bgj-study-v2",
     "sources": [
       "https://www.fujian.gov.cn/zwgk/ztzl/sxzygwzxsgzx/sdjj/wvjj/202403/t20240327_6420206.htm"
     ]

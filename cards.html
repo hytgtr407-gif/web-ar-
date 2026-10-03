@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>《贬官记》三张人物卡</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f6f2e7; color: #10251f; font-family: system-ui, sans-serif; }
+    main { max-width: 1200px; margin: auto; padding: 24px; }
+    h1 { font-size: 24px; } p { line-height: 1.6; }
+    .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
+    figure { margin: 0; } img { display: block; width: 100%; height: auto; }
+    figcaption { text-align: center; font-weight: 600; margin: 10px 0; }
+    a { color: #10251f; }
+    @media (max-width: 650px) { .cards { grid-template-columns: 1fr; } }
+    @media print { main { padding: 0; } .intro { display: none; } .cards { gap: 10mm; } }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="intro">
+      <h1>《贬官记》三张人物卡</h1>
+      <p>请用另一块屏幕显示此页，或打印人物卡。再用体验手机的摄像头扫描，一次对准一张完整卡片。</p>
+      <p>同一部手机上的图片不能直接用它自己的摄像头扫描。</p>
+      <p><a href="./study.html">在体验手机上打开人物介绍研究体验</a></p>
+    </div>
+    <div class="cards">
+      <figure><img src="./assets/images/bianyixiao.jpg" alt="边一笑人物卡"><figcaption>边一笑</figcaption></figure>
+      <figure><img src="./assets/images/cuiyunlong.jpg" alt="崔云龙人物卡"><figcaption>崔云龙</figcaption></figure>
+      <figure><img src="./assets/images/zhangxiuyu.jpg" alt="张岫玉人物卡"><figcaption>张岫玉</figcaption></figure>
+    </div>
+  </main>
+</body>
+</html>

@@ -4,51 +4,48 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#10251f">
-  <title>《贬官记》WebAR阅读系统</title>
+  <title>《贬官记》人物卡识别</title>
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-  <style>
-    * { box-sizing: border-box; }
-    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; }
-    body { background: #10251f; color: #f5dfaa; font-family: system-ui, sans-serif; }
-    #ar-container { position: fixed; inset: 0; overflow: hidden; isolation: isolate; }
-    /* MindAR gives video a negative z-index; keep it above the page background. */
-    #ar-container > video { z-index: 0 !important; }
-    #ar-container > a-scene { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; }
-    #info { position: fixed; top: max(12px, env(safe-area-inset-top)); right: 12px;
-      z-index: 10; width: min(300px, calc(100vw - 24px)); max-height: 55vh;
-      overflow: auto; background: #10251fee; border: 1px solid #c9a85c;
-      padding: 14px; border-radius: 12px; }
-    h1 { font-size: 19px; margin: 0 0 10px; }
-    #status { font-weight: 600; }
-    #help, #content { font-size: 14px; line-height: 1.6; margin-top: 8px; }
-    #content { white-space: pre-line; }
-    #actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-    button { min-height: 44px; padding: 8px 12px; border: 1px solid #c9a85c;
-      border-radius: 6px; background: #f5dfaa; color: #10251f; cursor: pointer; }
-    button:disabled { opacity: .6; cursor: wait; }
-    #debug-overlay { position: fixed; left: 12px; right: 12px;
-      bottom: max(12px, env(safe-area-inset-bottom)); z-index: 10;
-      max-height: 30vh; overflow: auto; margin: 0; padding: 10px;
-      background: #000c; color: #afffc7; border-radius: 8px;
-      font: 12px/1.6 ui-monospace, monospace; white-space: pre-wrap; pointer-events: none; }
-  </style>
-  <script src="./assets/app.js?v=study-preview-20261003" defer></script>
+  <link rel="stylesheet" href="./assets/ui.css?v=20261004">
+  <script src="./assets/app.js?v=hci-experience-v2-20261004" defer></script>
 </head>
 <body>
-  <main id="ar-container" aria-label="AR相机画面"></main>
-  <section id="info">
-    <h1>《贬官记》AR阅读</h1>
+  <main id="ar-container" aria-label="人物卡相机画面"></main>
+  <section id="info" aria-labelledby="page-title">
+    <h1 id="page-title">《贬官记》人物卡识别</h1>
+    <p id="purpose">扫描闽剧人物卡，识别卡片并查看人物介绍的发布状态。</p>
+    <a class="entry-link" href="./study.html">填写新问卷前，请进入人物介绍研究体验 →</a>
+    <details id="guide" open>
+      <summary>操作步骤与人物卡</summary>
+      <ol>
+        <li>准备纸卡，或用另一块屏幕打开人物卡。</li>
+        <li>点击“启动相机”，允许摄像头权限。</li>
+        <li>依次扫描边一笑、崔云龙、张岫玉，查看页面状态。</li>
+        <li>将一张卡移出镜头，再放回来，观察恢复情况。</li>
+      </ol>
+      <a href="./cards.html" target="_blank" rel="noopener noreferrer">打开三张人物卡（供另一块屏幕或打印使用）</a>
+      <p class="small">保持卡片完整、光线充足。未能操作的步骤可以如实记录。</p>
+    </details>
+    <button id="start" class="primary" type="button" disabled>正在准备…</button>
+    <p class="label">卡片识别状态</p>
     <div id="status" role="status" aria-live="polite">正在加载识别资源…</div>
     <div id="help">首次加载需要下载约 2.5 MB 的卡片数据，请保持网络连接。</div>
-    <div id="content">等待识别角色卡</div>
-    <div id="actions">
-      <button id="start" type="button" disabled>正在准备…</button>
-      <button id="export" type="button">导出实验日志</button>
-      <button id="debug-toggle" type="button" aria-controls="debug-overlay" aria-pressed="true">隐藏调试</button>
-    </div>
+    <div id="review-status" role="status" aria-live="polite">扫描卡片后显示内容状态</div>
+    <div id="content">等待识别人物卡</div>
+    <details id="sources" hidden></details>
+    <p id="scan-progress" class="small">已识别 0/3 张人物卡</p>
+    <details id="research-tools">
+      <summary>体验记录与调试</summary>
+      <p class="small">体验编号：<span id="session-code">正在生成</span><br>操作日志保存在本次页面，可自行导出；不会上传摄像头画面。</p>
+      <div id="actions">
+        <button id="export" type="button">导出体验日志</button>
+        <button id="debug-toggle" type="button" aria-controls="debug-overlay" aria-pressed="false">显示调试</button>
+      </div>
+      <p class="small">识别计数不代表已经阅读或理解。人物介绍体验请使用上方研究体验入口。</p>
+    </details>
     <noscript>请启用 JavaScript 后重新打开页面。</noscript>
   </section>
-  <pre id="debug-overlay" aria-label="MindAR调试信息">targetIndex: —
+  <pre id="debug-overlay" hidden aria-label="MindAR调试信息">targetIndex: —
 等待 MindAR 初始化</pre>
   <!-- Instantiate only after both libraries register, avoiding cached-script races. -->
   <template id="ar-template">
