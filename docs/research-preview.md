@@ -1,6 +1,6 @@
 # 人物介绍研究体验
 
-更新日期：2026-10-04。入口：`study.html`；内容：`assets/data/study-scene.json`；内容版本：`bgj-study-v2`；界面版本：`hci-experience-v2-20261004`。
+更新日期：2026-10-04。入口：`study.html`；内容：`assets/data/study-scene.json`；内容版本：`bgj-study-v2`；界面版本：`hci-experience-v3-20261004`。
 
 本轮让参与者扫描三张人物卡，阅读短介绍与人物关系，移开卡片并恢复查看，然后填写新版问卷。页面持续标注研究草稿、尚待专家审核。介绍依据下列公开报道和剧评整理，不冒称已获池晗老师确认。当前 AR 层是半透明平面，人物文字在信息面板展示。
 

@@ -54,7 +54,7 @@ CSV 保留 `target_found` / `target_lost`，增加 `semantic_gate_pass` / `seman
 
 ## 用户体验研究预览（2026-10-03）
 
-用户研究入口为 [`study.html`](study.html)。2026-10-04 更新为内容版本 `bgj-study-v2`，界面版本 `hci-experience-v2-20261004`。该入口展示有公开资料依据、尚待专家审核的三人物短介绍、人物关系和资料来源，页面持续提示研究草稿状态。正式入口的严格门控保留，正式审核状态没有改为已通过。
+用户研究入口为 [`study.html`](study.html)。2026-10-04 更新为内容版本 `bgj-study-v2`，界面版本 `hci-experience-v3-20261004`。该入口展示有公开资料依据、尚待专家审核的三人物短介绍、人物关系和资料来源，页面持续提示研究草稿状态。正式入口的严格门控保留，正式审核状态没有改为已通过。
 
 研究例外展示另记 `research_preview_display`，不会计为 `semantic_gate_pass`；日志增加研究模式及内容版本。预测试后可先开展操作、AR 体验和感知学习支持评价，再把论文与资料整体交老师审核；不宣称用户研究验证了文化真实性或客观学习增长。细节、来源与修改后的适用范围见 [`docs/research-preview.md`](docs/research-preview.md)。
 

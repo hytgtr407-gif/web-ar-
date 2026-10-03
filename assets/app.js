@@ -37,7 +37,7 @@
   const sourcesPanel = document.getElementById('sources');
   const scanProgress = document.getElementById('scan-progress');
   const guide = document.getElementById('guide');
-  const interfaceVersion = 'hci-experience-v2-20261004';
+  const interfaceVersion = 'hci-experience-v3-20261004';
   const interfaceVariant = new URLSearchParams(window.location.search).get('ui') === 'A' ? 'A' : 'B';
   const enhancedUI = interfaceVariant === 'B';
   const recognizedIndexes = new Set();
@@ -300,7 +300,7 @@
           record.sources.every(url => typeof url === 'string' && /^https:\/\/[^\s,]+$/.test(url));
         if (previewAllowed) {
           setReviewStatus('研究草稿可供体验 · 尚未完成专家审核');
-          content.textContent = `${record.title}\n${record.description}\n研究预览 · 文化说明待专家审核`;
+          content.textContent = `${record.title}\n${record.description}\n测试版 · 人物介绍待闽剧专家审核与校订`;
           showSources(record, index);
           if (enhancedUI) help.textContent = '可上下滑动阅读，再扫描其他卡片。';
           setContentVisibility(event.currentTarget, true);

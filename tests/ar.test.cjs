@@ -319,7 +319,7 @@ test('research preview shows three unaudited drafts without logging audited gate
     a.ids.info.scrollTop = 100;
     entity.emit('targetFound');
     assert.equal(entity.semanticContent.attributes.visible, true);
-    assert.ok(a.ids.content.textContent.includes('文化说明待专家审核'));
+    assert.ok(a.ids.content.textContent.includes('人物介绍待闽剧专家审核与校订'));
     assert.ok(a.ids['debug-overlay'].textContent.includes('Semantic Gate: 拦截'));
     entity.emit('targetLost');
     assert.equal(entity.semanticContent.attributes.visible, false);
@@ -446,7 +446,7 @@ test('all conditions export session, interface and content versions without assu
     const variant = search === '?ui=A' ? 'A' : 'B';
     for (const row of rows.slice(1)) {
       assert.equal(row[9], variant);
-      assert.equal(row[10], 'hci-experience-v2-20261004');
+      assert.equal(row[10], 'hci-experience-v3-20261004');
       assert.ok(Number(row[5]) >= 0);
       assert.equal(row[0], a.ids['session-code'].textContent);
     }
