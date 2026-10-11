@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#10251f">
   <title>《贬官记》人物卡研究体验</title>
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-  <link rel="stylesheet" href="./assets/ui.css?v=20261004">
-  <script src="./assets/app.js?v=hci-experience-v3-20261004" defer></script>
+  <link rel="stylesheet" href="./assets/ui.css?v=20261011">
+  <script src="./assets/app.js?v=state-presentation-v4-20261011" defer></script>
 </head>
 <body>
   <main id="ar-container" aria-label="人物卡相机画面"></main>
@@ -15,6 +15,7 @@
     <h1 id="page-title">《贬官记》人物卡体验</h1>
     <p id="purpose">扫描三张人物卡，阅读人物短介绍，再尝试移开卡片并恢复查看。</p>
     <p id="study-notice" data-study-version="bgj-study-v2">【测试版】当前人物介绍是开发组草稿，待闽剧专家审核与校订。<br><span>介绍依据公开资料整理，仅供本次研究体验。</span></p>
+    <a id="entry-link" class="entry-link" href="./index.html">查看正式发布入口 →<br><span class="small">切换入口前，请先导出本页日志。</span></a>
     <details id="guide" open>
       <summary>操作步骤与人物卡</summary>
       <ol>
@@ -27,21 +28,46 @@
       <p class="small">保持卡片完整、光线充足。未能操作的步骤可以如实记录。</p>
     </details>
     <button id="start" class="primary" type="button" disabled>正在准备…</button>
-    <p class="label">卡片识别状态</p>
-    <div id="status" role="status" aria-live="polite">正在加载识别资源…</div>
-    <div id="help">首次加载需要下载约 2.5 MB 的卡片数据，请保持网络连接。</div>
-    <div id="review-status" role="status" aria-live="polite">扫描卡片后显示内容状态</div>
+    <section id="state-panel" aria-label="当前状态">
+      <div class="state-part">
+        <p class="state-label">卡片识别</p>
+        <div id="status" role="status" aria-live="polite">正在加载识别资源…</div>
+      </div>
+      <div class="state-part">
+        <p class="state-label">人物介绍</p>
+        <div id="review-status" role="status" aria-live="polite">扫描卡片后显示内容状态</div>
+      </div>
+      <div class="state-part">
+        <p class="state-label">下一步</p>
+        <div id="help">首次加载需要下载约 2.5 MB 的卡片数据，请保持网络连接。</div>
+      </div>
+    </section>
     <div id="content">等待识别人物卡</div>
     <details id="sources" hidden></details>
-    <p id="scan-progress" class="small">已识别 0/3 张人物卡</p>
     <details id="research-tools">
       <summary>体验记录与调试</summary>
-      <p class="small">体验编号：<span id="session-code">正在生成</span><br>操作日志保存在本次页面，可自行导出；不会上传摄像头画面。</p>
+      <p class="small">本次页面编号：<span id="session-code">正在生成</span><br>日志仅保存在本次页面内存。关闭、刷新或切换入口前，请先导出；不同页面分别保存。页面不上传日志或摄像头画面。</p>
+      <p class="small">界面版本：<span id="version-code">正在生成</span><br>研究标签：<span id="study-label">未分配</span></p>
       <div id="actions">
         <button id="export" type="button">导出体验日志</button>
         <button id="debug-toggle" type="button" aria-controls="debug-overlay" aria-pressed="false">显示调试</button>
       </div>
-      <p class="small">识别计数不代表已经阅读或理解。体验结束后填写研究者提供的新版问卷。</p>
+      <p class="small">识别事件不代表已经阅读或理解。体验结束后填写研究者提供的新版问卷。</p>
+    </details>
+    <details id="observer-panel" hidden>
+      <summary>研究者记录工具</summary>
+      <p class="small">仅供观察者标记时间。这些按钮不判断任务完成或理解是否正确，也不提供显示权限。</p>
+      <label class="small" for="observer-task">任务标签</label>
+      <select id="observer-task" aria-label="研究者任务标签">
+        <option value="T01">T01</option><option value="T02">T02</option>
+        <option value="T03">T03</option><option value="T04">T04</option>
+      </select>
+      <div class="observer-actions">
+        <button id="observer-start" type="button">标记开始</button>
+        <button id="observer-end" type="button">标记结束</button>
+        <button id="observer-help" type="button">记录一次帮助</button>
+      </div>
+      <p id="observer-status" class="small">没有进行中的任务标签</p>
     </details>
     <noscript>请启用 JavaScript 后重新打开页面。</noscript>
   </section>
