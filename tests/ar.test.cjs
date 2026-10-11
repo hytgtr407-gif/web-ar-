@@ -28,7 +28,7 @@ class Element {
 }
 
 async function app(options = {}) {
-  const ids = Object.fromEntries(['status', 'help', 'content', 'start', 'debug-overlay', 'debug-toggle', 'ar-container', 'export', 'ar-template', 'review-status', 'sources', 'scan-progress', 'guide', 'info', 'session-code'].map(id => [id, new Element()]));
+  const ids = Object.fromEntries(['status', 'help', 'content', 'start', 'debug-overlay', 'debug-toggle', 'ar-container', 'export', 'ar-template', 'review-status', 'sources', 'guide', 'info', 'session-code', 'observer-panel', 'observer-status', 'observer-task', 'observer-start', 'observer-end', 'observer-help', 'version-code', 'study-label', 'entry-link'].map(id => [id, new Element()]));
   ids.guide.setAttribute('open', '');
   if (options.studyPreview) {
     ids['study-notice'] = new Element();
@@ -176,8 +176,8 @@ test('production records remain unaudited and block text and AR layers for all t
     const id = ['BGJ_CHAR_006', 'BGJ_CHAR_008', 'BGJ_CHAR_007'][index];
     assert.equal(productionMetadata[id].audited, false);
     entity.emit('targetFound');
-    assert.equal(a.ids.status.textContent, '识别成功');
-    assert.equal(a.ids.content.textContent, '内容暂未开放\n内容尚未审核');
+    assert.ok(a.ids.status.textContent.startsWith('已识别：'));
+    assert.equal(a.ids.content.textContent, '内容暂未开放\n人物介绍尚未完成专家审核，暂不展示。');
     assert.equal(entity.semanticContent.attributes.visible, false);
     entity.emit('targetLost');
     assert.equal(a.ids.content.textContent, '请将角色卡放回画面。');
@@ -226,8 +226,8 @@ test('unavailable or malformed metadata preserves recognition and blocks deliver
     const a = await app(options);
     assert.equal(a.ids.status.textContent, '资源已就绪');
     a.ready(); a.scene.entities[0].emit('targetFound');
-    assert.equal(a.ids.status.textContent, '识别成功');
-    assert.equal(a.ids.content.textContent, '内容暂未开放\n内容数据暂时不可用');
+    assert.ok(a.ids.status.textContent.startsWith('已识别：'));
+    assert.equal(a.ids.content.textContent, '内容暂未开放\n内容数据暂时不可用。');
     const csv = await a.csv();
     assert.ok(csv.includes(',target_found,'));
     assert.ok(csv.includes(',semantic_metadata_error,'));
@@ -241,7 +241,7 @@ test('metadata download timeout still allows camera startup with delivery blocke
   await new Promise(setImmediate);
   assert.equal(a.ids.status.textContent, '资源已就绪');
   a.ready(); a.scene.entities[0].emit('targetFound');
-  assert.equal(a.ids.content.textContent, '内容暂未开放\n内容数据暂时不可用');
+  assert.equal(a.ids.content.textContent, '内容暂未开放\n内容数据暂时不可用。');
 });
 
 test('switching from allowed to blocked content hides old layers and tolerates a late loss', async () => {
@@ -253,7 +253,7 @@ test('switching from allowed to blocked content hides old layers and tolerates a
   assert.equal(a.scene.entities[0].semanticContent.attributes.visible, false);
   assert.equal(a.scene.entities[1].semanticContent.attributes.visible, false);
   a.scene.entities[0].emit('targetLost');
-  assert.equal(a.ids.content.textContent, '内容暂未开放\n内容尚未审核');
+  assert.equal(a.ids.content.textContent, '内容暂未开放\n人物介绍尚未完成专家审核，暂不展示。');
   a.scene.entities[1].emit('targetLost');
   assert.equal(a.ids.content.textContent, '请将角色卡放回画面。');
 });
@@ -382,7 +382,6 @@ test('B identifies each card while preserving formal blocking, then clears on lo
     assert.equal(a.ids['review-status'].textContent, '当前未显示人物介绍');
     assert.ok(a.ids.help.textContent.includes('放回镜头'));
   }
-  assert.ok(a.ids['scan-progress'].textContent.startsWith('已识别 3/3'));
   assert.ok(!(await a.csv()).includes(',semantic_gate_pass,'));
 });
 
@@ -446,7 +445,7 @@ test('all conditions export session, interface and content versions without assu
     const variant = search === '?ui=A' ? 'A' : 'B';
     for (const row of rows.slice(1)) {
       assert.equal(row[9], variant);
-      assert.equal(row[10], 'hci-experience-v3-20261004');
+      assert.equal(row[10], 'state-presentation-v4-20261011');
       assert.ok(Number(row[5]) >= 0);
       assert.equal(row[0], a.ids['session-code'].textContent);
     }
@@ -470,4 +469,136 @@ test('camera failure hides research content, sources and presentation state', as
   assert.equal(a.ids['review-status'].textContent, '当前未显示人物介绍');
   assert.equal(a.scene.entities[0].semanticContent.attributes.visible, false);
   assert.equal(a.stops, 1);
+});
+
+function parseCSV(text) {
+  const rows = []; let row = []; let cell = ''; let quoted = false;
+  for (let i = 0; i < text.replace(/^\uFEFF/, '').length; i++) {
+    const input = text.replace(/^\uFEFF/, '');
+    const c = input[i];
+    if (c === '"') {
+      if (quoted && input[i + 1] === '"') { cell += '"'; i++; }
+      else quoted = !quoted;
+    } else if (!quoted && c === ',') { row.push(cell); cell = ''; }
+    else if (!quoted && c === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; }
+    else cell += c;
+  }
+  if (cell || row.length) { row.push(cell); rows.push(row); }
+  const columns = rows.shift();
+  return rows.map(values => Object.fromEntries(columns.map((column, i) => [column, values[i]])));
+}
+
+test('A/B have identical visible event text, gate outcomes, sources and recovery within each entry', async () => {
+  for (const studyPreview of [false, true]) {
+    const a = await app({ studyPreview, search: '?ui=A' }); a.ready();
+    const b = await app({ studyPreview, search: '?ui=B' }); b.ready();
+    assert.equal(a.document.body.attributes['data-ui'], 'A');
+    assert.equal(b.document.body.attributes['data-ui'], 'B');
+    for (let index = 0; index < 3; index++) {
+      for (const event of ['targetFound', 'targetLost', 'targetFound']) {
+        a.scene.entities[index].emit(event); b.scene.entities[index].emit(event);
+        for (const id of ['status', 'help', 'review-status', 'content']) {
+          assert.equal(a.ids[id].textContent, b.ids[id].textContent, `${studyPreview}/${event}/${id}`);
+        }
+        assert.equal(a.scene.entities[index].semanticContent.attributes.visible, b.scene.entities[index].semanticContent.attributes.visible);
+        assert.equal(a.ids.sources.hidden, b.ids.sources.hidden);
+      }
+    }
+    const gateEvents = rows => rows.filter(r => /^(semantic_gate_|research_preview_display)/.test(r.event)).map(r => [r.event, r.target_id, r.reason]);
+    assert.deepEqual(gateEvents(parseCSV(await a.csv())), gateEvents(parseCSV(await b.csv())));
+  }
+});
+
+test('anonymous study labels join distinct page sessions without acting as preview permission', async () => {
+  const shared = 'study_id=P01&study_run=RUN_20261011';
+  const a = await app({ search: `?ui=A&${shared}` }); a.ready(); a.scene.entities[0].emit('targetFound');
+  const b = await app({ search: `?ui=B&${shared}`, studyPreview: true }); b.ready(); b.scene.entities[0].emit('targetFound');
+  const rowsA = parseCSV(await a.csv()); const rowsB = parseCSV(await b.csv());
+  assert.notEqual(rowsA[0].session_id, rowsB[0].session_id);
+  for (const row of [...rowsA, ...rowsB]) {
+    assert.equal(row.study_id, 'P01'); assert.equal(row.study_run, 'RUN_20261011');
+    assert.equal(row.user_id, row.session_id, 'legacy user_id is a session alias, not a persistent participant ID');
+    assert.equal(row.schema_version, 'webar-observation-1');
+  }
+  assert.ok(!rowsA.some(r => r.event === 'research_preview_display'));
+  assert.ok(rowsA.some(r => r.event === 'semantic_gate_block'));
+  const displayed = rowsB.find(r => r.event === 'research_preview_display');
+  assert.equal(displayed.metadata_version, 'bgj-study-v2');
+  assert.equal(displayed.entry, 'study.html');
+  assert.equal(displayed.metadata_source, './assets/data/study-scene.json');
+  const pilot = await app({ search: '?study_id=PILOT01&study_run=PILOT_20261011' });
+  assert.ok(parseCSV(await pilot.csv()).every(r => r.study_id === 'PILOT01'));
+  assert.ok(pilot.ids['version-code'].textContent.includes('state-presentation-v4-20261011'));
+  assert.equal(pilot.ids['study-label'].textContent, 'PILOT01 / PILOT_20261011');
+});
+
+test('invalid study labels and UI values are discarded without retaining raw query data', async () => {
+  const a = await app({ search: '?ui=unexpected&study_id=Alice%40example.com&study_run=%3D1%2B1&observer=true' });
+  const csv = await a.csv(); const rows = parseCSV(csv);
+  for (const row of rows) { assert.equal(row.study_id, ''); assert.equal(row.study_run, ''); assert.equal(row.ui_variant, 'B'); }
+  for (const reason of ['ui', 'study_id', 'study_run', 'observer']) assert.ok(rows.some(r => r.event === 'parameter_ignored' && r.reason === reason));
+  assert.ok(!csv.includes('Alice')); assert.ok(!csv.includes('example.com')); assert.ok(!csv.includes('=1+1'));
+  assert.equal(a.ids['observer-panel'].hidden, true);
+});
+
+test('observer markers are opt-in, bounded manual times and never success assertions', async () => {
+  const regular = await app();
+  regular.ids['observer-task'].value = 'T01'; regular.ids['observer-start'].click();
+  assert.ok(!parseCSV(await regular.csv()).some(r => r.event.startsWith('observer_')));
+  const a = await app({ studyPreview: true, search: '?observer=1&ui=A' }); a.ready();
+  assert.equal(a.ids['observer-panel'].hidden, false);
+  assert.equal(a.ids['debug-overlay'].hidden, true);
+  a.ids['observer-task'].value = 'T99'; a.ids['observer-start'].click();
+  a.ids['observer-task'].value = 'T01'; a.ids['observer-start'].click(); a.ids['observer-start'].click();
+  a.scene.entities[0].emit('targetFound'); a.ids['observer-help'].click(); a.ids['observer-end'].click();
+  const rows = parseCSV(await a.csv());
+  const manual = rows.filter(r => r.event.startsWith('observer_'));
+  assert.deepEqual(manual.map(r => r.event), ['observer_task_start', 'observer_help_given', 'observer_task_end']);
+  for (const row of manual) { assert.equal(row.manual_marker, 'true'); assert.equal(row.observer_task, 'T01'); }
+  const found = rows.find(r => r.event === 'target_found');
+  assert.equal(found.observer_task, 'T01'); assert.equal(found.manual_marker, 'false');
+  assert.ok(!rows.some(r => /completed|correct|understood|success/.test(r.event)));
+});
+
+test('visibility and startup errors export actual local events with escaped diagnostic text', async () => {
+  const a = await app(); a.ready();
+  a.document.hidden = true; a.document.emit('visibilitychange');
+  a.document.hidden = false; a.document.emit('visibilitychange');
+  const rows = parseCSV(await a.csv()).filter(r => r.event === 'page_visibility_changed');
+  assert.deepEqual(rows.map(r => r.visibility), ['hidden', 'visible']);
+  const b = await app({ initError: 'test,"engine"\nerror' }); b.start();
+  await b.scene.systems['mindar-image-system']._startAR();
+  const error = parseCSV(await b.csv()).find(r => r.event === 'ar_error');
+  assert.ok(error.detail.includes('test,"engine"\nerror'));
+  assert.equal(error.phase, 'failed');
+});
+
+test('shared study notice and task guide remain present and neither HTML contains recognition progress', () => {
+  const studyHTML = fs.readFileSync(path.join(root, 'study.html'), 'utf8');
+  for (const text of [html, studyHTML]) {
+    assert.ok(text.includes('id="state-panel"'));
+    assert.ok(text.includes('id="observer-panel" hidden'));
+    assert.ok(!text.includes('id="scan-progress"'));
+    assert.ok(text.includes('不同页面分别保存'));
+  }
+  assert.ok(studyHTML.includes('当前人物介绍是开发组草稿，待闽剧专家审核与校订'));
+});
+
+
+test('entry switch links preserve validated assignment labels and observer mode in both directions', async () => {
+  for (const studyPreview of [false, true]) {
+    const a = await app({ studyPreview, search: '?ui=A&study_id=PILOT01&study_run=PILOT_20261011&observer=1' });
+    const destination = new URL(a.ids['entry-link'].href);
+    assert.equal(destination.pathname, studyPreview ? '/web-ar-/index.html' : '/web-ar-/study.html');
+    assert.equal(destination.searchParams.get('ui'), 'A');
+    assert.equal(destination.searchParams.get('study_id'), 'PILOT01');
+    assert.equal(destination.searchParams.get('study_run'), 'PILOT_20261011');
+    assert.equal(destination.searchParams.get('observer'), '1');
+    a.ids['entry-link'].click();
+    const switchEvent = parseCSV(await a.csv()).find(r => r.event === 'entry_switch_requested');
+    assert.equal(switchEvent.reason, 'export_each_page_before_navigation');
+  }
+  const invalid = await app({ search: '?ui=bad&study_id=Alice&study_run=raw_private&observer=0' });
+  const destination = new URL(invalid.ids['entry-link'].href);
+  assert.equal(destination.search, '?ui=B');
 });
