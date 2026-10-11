@@ -18,13 +18,22 @@ body { background: #10251f; color: #f5dfaa; font-family: system-ui, sans-serif; 
 #info[data-scanning="true"] #study-notice span, #info[data-scanning="true"] #study-notice br { display: none; }
 #info[data-scanning="true"] #guide { order: 10; }
 #research-tools { order: 12; }
+#observer-panel { order: 13; }
 h1 { font-size: 20px; line-height: 1.4; margin: 0 0 8px; }
 p { margin: 8px 0; }
 #purpose, #help, #content { font-size: 15px; line-height: 1.65; }
 #content { white-space: pre-line; margin-top: 10px; }
 #status { font-size: 17px; font-weight: 650; line-height: 1.5; }
-#review-status, #study-notice { padding: 8px 10px; border-left: 3px solid #c9a85c;
+#study-notice { padding: 8px 10px; border-left: 3px solid #c9a85c;
   background: #f5dfaa0a; font-size: 14px; line-height: 1.55; margin-top: 10px; }
+#review-status { font-size: 14px; line-height: 1.55; }
+/* Conditions share all event text and release logic; only presentation differs. */
+.state-label { display: none; }
+.state-part { margin-top: 8px; }
+body[data-ui="B"] #state-panel { margin-top: 10px; border: 1px solid #c9a85c70; border-radius: 8px; }
+body[data-ui="B"] .state-part { margin: 0; padding: 8px 10px; }
+body[data-ui="B"] .state-part + .state-part { border-top: 1px solid #f5dfaa25; }
+body[data-ui="B"] .state-label { display: block; margin: 0 0 3px; color: #d8cfb7; font-size: 12px; line-height: 1.4; }
 #study-notice span { font-size: 13px; }
 .label, .small { font-size: 12px; line-height: 1.6; color: #d8cfb7; }
 .label { margin-top: 14px; margin-bottom: 3px; }
@@ -37,6 +46,8 @@ a { color: #f9dfa4; text-underline-offset: 3px; line-height: 1.6; }
   border-radius: 6px; font-size: 14px; margin: 10px 0; }
 #sources a { display: block; font-size: 13px; padding: 6px 0; }
 #actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.observer-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+select { min-height: 40px; padding: 6px; border-radius: 5px; font: inherit; }
 button { min-height: 44px; padding: 9px 12px; border: 1px solid #c9a85c;
   border-radius: 7px; background: #f5dfaa; color: #10251f; cursor: pointer;
   font: inherit; font-size: 14px; }
