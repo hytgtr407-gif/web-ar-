@@ -35,22 +35,35 @@
   const infoPanel = document.getElementById('info');
   const reviewStatus = document.getElementById('review-status');
   const sourcesPanel = document.getElementById('sources');
-  const scanProgress = document.getElementById('scan-progress');
   const guide = document.getElementById('guide');
-  const interfaceVersion = 'hci-experience-v3-20261004';
-  const interfaceVariant = new URLSearchParams(window.location.search).get('ui') === 'A' ? 'A' : 'B';
-  const enhancedUI = interfaceVariant === 'B';
-  const recognizedIndexes = new Set();
+  const interfaceVersion = 'state-presentation-v4-20261011';
+  const logSchemaVersion = 'webar-observation-1';
+  const parameters = new URLSearchParams(window.location.search);
+  const interfaceVariant = parameters.get('ui') === 'A' ? 'A' : 'B';
+  document.body.setAttribute('data-ui', interfaceVariant);
+  // Anonymous join keys only; these parameters grant no display permission.
+  // Invalid values are discarded without exporting their raw text.
+  const studyID = /^(?:P|PILOT)\d{2,3}$/.test(parameters.get('study_id') ?? '') ? parameters.get('study_id') : '';
+  const studyRun = /^[A-Z][A-Z0-9_-]{2,23}$/.test(parameters.get('study_run') ?? '') ? parameters.get('study_run') : '';
+  const observerMode = parameters.get('observer') === '1';
   // Explicit study entry only. Query parameters cannot enable this exception.
   const studyVersion = document.getElementById('study-notice')?.dataset?.studyVersion ?? '';
   const isStudyPreview = studyVersion === 'bgj-study-v2';
   const metadataSource = isStudyPreview ? './assets/data/study-scene.json' : './assets/data/scene.json';
   const logs = [];
   const disposedControllers = new WeakSet();
-  const userID = 'anonymous_' + Math.random().toString(36).slice(2, 8);
+  const sessionID = 'S_' + (window.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 14)}`);
   const sessionClockStart = performance.now();
   const sessionCode = document.getElementById('session-code');
-  if (sessionCode) sessionCode.textContent = userID;
+  if (sessionCode) sessionCode.textContent = sessionID;
+  const versionCode = document.getElementById('version-code');
+  if (versionCode) versionCode.textContent = `${interfaceVersion} · UI ${interfaceVariant} · ${isStudyPreview ? studyVersion : '正式入口'}`;
+  const studyLabel = document.getElementById('study-label');
+  if (studyLabel) studyLabel.textContent = `${studyID || '未分配'} / ${studyRun || '未分配'}`;
+  const observerPanel = document.getElementById('observer-panel');
+  const observerStatus = document.getElementById('observer-status');
+  if (observerPanel) observerPanel.hidden = !observerMode;
+  let activeObserverTask = '';
   let phase = 'loading';
   let scene;
   let arSystem;
@@ -64,6 +77,17 @@
   let activeTargetIndex = null;
   let gateState = '等待识别';
   let gateReasons = [];
+  const entryLink = document.getElementById('entry-link');
+  if (entryLink) {
+    const destination = new URL(isStudyPreview ? './index.html' : './study.html', document.baseURI);
+    destination.searchParams.set('ui', interfaceVariant);
+    if (studyID) destination.searchParams.set('study_id', studyID);
+    if (studyRun) destination.searchParams.set('study_run', studyRun);
+    if (observerMode) destination.searchParams.set('observer', '1');
+    entryLink.href = destination.href;
+    entryLink.addEventListener('click', () => logEvent('entry_switch_requested', activeTargetIndex,
+      'export_each_page_before_navigation', { detail: isStudyPreview ? 'index.html' : 'study.html' }));
+  }
 
   function updateDebug() {
     const character = CHARACTERS_BY_TARGET_INDEX[lastTargetIndex];
@@ -76,20 +100,25 @@
       (metadataError ? `\n语义数据: ${metadataError}` : '') + (failure ? `\n错误: ${failure}` : '');
   }
 
-  function logEvent(event, index = null, reason = '') {
-    logs.push({ user_id: userID, target_id: CHARACTERS_BY_TARGET_INDEX[index]?.id ?? '',
+  function logEvent(event, index = null, reason = '', detail = {}) {
+    logs.push({ user_id: sessionID, target_id: CHARACTERS_BY_TARGET_INDEX[index]?.id ?? '',
       target_index: index ?? '', event, timestamp: new Date().toISOString(),
       elapsed_ms: Number((performance.now() - sessionClockStart).toFixed(1)), reason,
       study_mode: isStudyPreview ? 'research_preview' : 'production',
       content_version: isStudyPreview ? studyVersion : '',
-      ui_variant: interfaceVariant, interface_version: interfaceVersion });
+      ui_variant: interfaceVariant, interface_version: interfaceVersion,
+      schema_version: logSchemaVersion, session_id: sessionID,
+      study_id: studyID, study_run: studyRun,
+      entry: isStudyPreview ? 'study.html' : 'index.html', metadata_source: metadataSource,
+      metadata_version: sceneMetadata ? (sceneMetadata[CHARACTERS_BY_TARGET_INDEX[index]?.id]?.content_version ?? 'undeclared') : '',
+      phase, visibility: document.hidden ? 'hidden' : 'visible',
+      observer_task: activeObserverTask, manual_marker: false, detail: '', ...detail });
   }
 
   function setReviewStatus(message) {
     if (reviewStatus) {
       reviewStatus.textContent = message;
-      // The persistent research notice already explains this state above the text.
-      reviewStatus.hidden = isStudyPreview && message === '研究草稿可供体验 · 尚未完成专家审核';
+      reviewStatus.hidden = false;
     }
   }
 
@@ -163,9 +192,10 @@
       const data = JSON.parse(new TextDecoder().decode(bytes));
       if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('JSON 顶层必须是角色字典');
       sceneMetadata = data;
+      logEvent('semantic_metadata_loaded', null, '', { detail: metadataSource });
     } catch (error) {
       metadataError = error.message;
-      logEvent('semantic_metadata_error', null, 'metadata_unavailable');
+      logEvent('semantic_metadata_error', null, 'metadata_unavailable', { detail: metadataError });
     }
   }
 
@@ -200,7 +230,7 @@
     startButton.disabled = false;
     startButton.textContent = '重新加载并重试';
     try { releaseCamera(); } catch (error) { console.warn('Camera cleanup:', error); }
-    logEvent('ar_error');
+    logEvent('ar_error', null, 'startup_or_runtime_failure', { detail: message });
     updateDebug();
   }
 
@@ -258,6 +288,7 @@
       help.textContent = metadataError ? '内容数据暂时不可用；仍可启动相机，内容展示将暂停。' : '点击启动，并允许使用后置相机。';
       startButton.disabled = false;
       startButton.textContent = '启动相机';
+      logEvent('resources_prepared');
       updateDebug();
     } catch (error) { fail(error.message); }
   }
@@ -274,9 +305,7 @@
       hideAllContents();
       clearSources();
       activeTargetIndex = index;
-      status.textContent = character ? (enhancedUI ? `已识别：${character.name}` : '识别成功') : '识别到未配置卡片';
-      if (character) recognizedIndexes.add(index);
-      if (scanProgress) scanProgress.textContent = `已识别 ${recognizedIndexes.size}/3 张人物卡（不代表已阅读）`;
+      status.textContent = character ? `已识别：${character.name}` : '识别到未配置卡片';
       logEvent('target_found', index);
       const result = semanticGateCheck(index);
       gateReasons = result.reasons;
@@ -285,7 +314,7 @@
         setReviewStatus('人物介绍已开放（按当前发布状态）');
         content.textContent = `${result.record.title}\n${result.record.description}`;
         showSources(result.record, index);
-        if (enhancedUI) help.textContent = '阅读介绍后，可继续扫描其他人物卡。';
+        help.textContent = '阅读介绍后，可继续扫描其他人物卡。';
         setContentVisibility(event.currentTarget, true);
         logEvent('semantic_gate_pass', index);
       } else {
@@ -302,13 +331,13 @@
           setReviewStatus('研究草稿可供体验 · 尚未完成专家审核');
           content.textContent = `${record.title}\n${record.description}\n测试版 · 人物介绍待闽剧专家审核与校订`;
           showSources(record, index);
-          if (enhancedUI) help.textContent = '可上下滑动阅读，再扫描其他卡片。';
+          help.textContent = '可上下滑动阅读，再扫描其他卡片。';
           setContentVisibility(event.currentTarget, true);
           logEvent('research_preview_display', index, 'expert_review_pending');
         } else {
           setReviewStatus('人物介绍暂未开放');
-          content.textContent = '内容暂未开放\n' + (enhancedUI ? blockExplanation(result) : result.reasons.map(reason => GATE_MESSAGES[reason]).join('；'));
-          if (enhancedUI) help.textContent = isStudyPreview ? '请稍后重新打开页面；也可继续扫描其他人物卡。' :
+          content.textContent = '内容暂未开放\n' + blockExplanation(result);
+          help.textContent = isStudyPreview ? '请稍后重新打开页面；也可继续扫描其他人物卡。' :
             '可继续扫描其他人物卡；参加问卷体验请使用“人物介绍研究体验”入口。';
         }
       }
@@ -323,7 +352,7 @@
         clearSources();
         setReviewStatus('当前未显示人物介绍');
         content.textContent = '请将角色卡放回画面。';
-        if (enhancedUI) help.textContent = '将卡片完整放回镜头内，系统会重新识别；这是追踪状态。';
+        help.textContent = '将卡片完整放回镜头内，系统会重新识别。';
         gateState = '等待识别';
         gateReasons = [];
         resetPanelScroll();
@@ -392,20 +421,46 @@
   }
 
   startButton.addEventListener('click', startAR);
+  function observerMarker(action) {
+    if (!observerMode) return;
+    if (action === 'start') {
+      const task = document.getElementById('observer-task')?.value ?? '';
+      if (!/^T0[1-4]$/.test(task) || activeObserverTask) return;
+      activeObserverTask = task;
+      logEvent('observer_task_start', activeTargetIndex, 'manual_time_marker', { manual_marker: true });
+    } else if (activeObserverTask) {
+      logEvent(action === 'end' ? 'observer_task_end' : 'observer_help_given', activeTargetIndex,
+        'manual_time_marker', { manual_marker: true });
+      if (action === 'end') activeObserverTask = '';
+    }
+    if (observerStatus) observerStatus.textContent = activeObserverTask ? `当前标签：${activeObserverTask}` : '没有进行中的任务标签';
+  }
+  document.getElementById('observer-start')?.addEventListener('click', () => observerMarker('start'));
+  document.getElementById('observer-end')?.addEventListener('click', () => observerMarker('end'));
+  document.getElementById('observer-help')?.addEventListener('click', () => observerMarker('help'));
+
+  function csvCell(value) {
+    let text = String(value ?? '');
+    // Prevent spreadsheet formulas when opening messages/metadata as CSV.
+    if (/^[=+@\-\t\r]/.test(text)) text = "'" + text;
+    return /[",\r\n]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text;
+  }
   document.getElementById('export').addEventListener('click', () => {
     logEvent('log_export_requested');
-    const columns = ['user_id', 'target_id', 'target_index', 'event', 'timestamp', 'elapsed_ms', 'reason', 'study_mode', 'content_version', 'ui_variant', 'interface_version'];
-    const rows = logs.map(log => columns.map(column => log[column]).join(','));
+    const columns = ['user_id', 'target_id', 'target_index', 'event', 'timestamp', 'elapsed_ms', 'reason', 'study_mode', 'content_version', 'ui_variant', 'interface_version',
+      'schema_version', 'session_id', 'study_id', 'study_run', 'entry', 'metadata_source', 'metadata_version',
+      'phase', 'visibility', 'observer_task', 'manual_marker', 'detail'];
+    const rows = logs.map(log => columns.map(column => csvCell(log[column])).join(','));
     const url = URL.createObjectURL(new Blob(['\uFEFF' + columns.join(',') + '\n' + rows.join('\n')], { type: 'text/csv;charset=utf-8' }));
     const link = document.createElement('a');
     link.href = url;
-    link.download = `AR_${isStudyPreview ? studyVersion : 'production'}_${interfaceVariant}_${userID}.csv`;
+    link.download = `AR_${studyRun || 'unassigned'}_${studyID || 'unassigned'}_${interfaceVariant}_${sessionID}.csv`;
     document.body.appendChild(link);
     link.click();
     link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   });
-  debug.hidden = new URLSearchParams(window.location.search).get('debug') !== '1';
+  debug.hidden = parameters.get('debug') !== '1';
   function updateDebugButton() {
     debugToggle.textContent = debug.hidden ? '显示调试' : '隐藏调试';
     debugToggle.setAttribute('aria-pressed', String(!debug.hidden));
@@ -421,11 +476,13 @@
     if (phase === 'starting' || phase === 'running') fail(`页面运行错误：${event.message}`);
   });
   document.addEventListener('visibilitychange', () => {
+    logEvent('page_visibility_changed', activeTargetIndex);
     if (phase !== 'running') return;
     if (document.hidden) arSystem.pause();
     else arSystem.unpause();
   });
   window.addEventListener('pagehide', () => {
+    logEvent('page_hidden_or_unloaded', activeTargetIndex);
     phase = 'closed';
     clearTimeout(startupTimer);
     try { releaseCamera(); } catch (error) { console.warn(error); }
@@ -435,5 +492,8 @@
   window.addEventListener('pageshow', event => { if (event.persisted) window.location.reload(); });
   updateDebug();
   logEvent('session_started');
+  for (const [name, valid] of [['ui', ['A', 'B'].includes(parameters.get('ui'))], ['study_id', Boolean(studyID)], ['study_run', Boolean(studyRun)], ['observer', observerMode]]) {
+    if (parameters.has(name) && !valid) logEvent('parameter_ignored', null, name);
+  }
   prepare();
 })();
