@@ -1,4 +1,4 @@
-import { voices, playRole, stopRole } from './audio.js';
+import { voices, playRole, stopRole } from './audio.js?v=2';
 
 const one = (id) => document.getElementById(id);
 const scan = one('scan');
@@ -41,7 +41,7 @@ function readRole(id, caption) {
   void playRole(id, {
     onCue(text) { caption.textContent = text; },
     onEnd() { listening(false); },
-    onError() { caption.textContent = voices[id].note; listening(false); }
+    onError() { caption.textContent = `${voices[id].line}${voices[id].note}`; listening(false); }
   });
 }
 
@@ -101,7 +101,7 @@ async function startScan() {
     return;
   }
   try {
-    const { startAR } = await import('./ar.js');
+    const { startAR } = await import('./ar.js?v=2');
     if (request.signal.aborted) return;
     const next = await startAR({
       container: one('ar-camera'),

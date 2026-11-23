@@ -3,9 +3,9 @@ import { MindARThree } from './vendor/mindar-image-three.prod.js';
 
 const directory = new URL('./assets/', import.meta.url);
 const portraits = [
-  { file: 'bian.webp', ratio: 155 / 200, x: 0, y: 0.035, height: 0.80, depth: 0.115, color: '#e76d50' },
-  { file: 'cui.webp', ratio: 93 / 183, x: -0.32, y: -0.045, height: 0.67, depth: 0.07, color: '#e5be77' },
-  { file: 'zhang.webp', ratio: 86 / 182, x: 0.32, y: -0.04, height: 0.70, depth: 0.07, color: '#96c3de' }
+  { file: 'bian-full.webp', x: 0, height: 0.87, depth: 0.102, color: '#e76d50' },
+  { file: 'cui-full.webp', x: -0.36, height: 0.76, depth: 0.07, color: '#e5be77' },
+  { file: 'zhang-full.webp', x: 0.36, height: 0.76, depth: 0.07, color: '#96c3de' }
 ];
 
 function place(child, parent, x = 0, y = 0, z = 0) {
@@ -87,15 +87,17 @@ function createStage(anchor, textures, quiet) {
   const light = place(flat({ map: particleMap(), color: '#ffcf8f', opacity: 0.95, blending: THREE.AdditiveBlending }, 0.25, 0.25), stage, 0.38, 0.32, 0.06);
   light.renderOrder = 4;
   const figurePlane = new THREE.PlaneGeometry(1, 1);
+  const figureRatios = textures.map(({ image }) => image.width / image.height);
+  const floor = -0.45;
   const figures = portraits.map((p, index) => {
     const render = new THREE.Mesh(figurePlane, material({
       map: textures[index],
       opacity: index === 0 ? 1 : 0.83,
       alphaTest: 0.025
     }));
-    render.scale.set(p.height * p.ratio, p.height, 1);
+    render.scale.set(p.height * figureRatios[index], p.height, 1);
     render.renderOrder = index === 0 ? 11 : 10;
-    place(render, cast, p.x, p.y, p.depth);
+    place(render, cast, p.x, floor + p.height * 0.5, p.depth);
     return render;
   });
   const orbit = Array.from({ length: 12 }, (_, i) => {
@@ -136,17 +138,17 @@ function createStage(anchor, textures, quiet) {
         const p = portraits[i];
         const focus = selected === i;
         const side = selected !== null && !focus;
-        const height = focus ? 0.93 : side ? 0.49 : p.height;
-        const x = focus ? 0 : side ? [-0.34, 0.35][i < selected ? i : i - 1] : p.x;
-        const y = (focus ? 0.035 : side ? -0.12 : p.y) +
-          (quiet ? 0 : Math.sin(time * 1.57 + i * 1.8) * 0.016);
+        const height = focus ? 0.95 : side ? 0.63 : p.height;
+        const x = focus ? 0 : side ? [-0.40, 0.40][i < selected ? i : i - 1] : p.x;
+        const y = floor + height * 0.5 +
+          (quiet ? 0 : Math.sin(time * 1.57 + i * 1.8) * 0.008);
         const targetOpacity = side ? 0.34 : focus || i === 0 ? 1 : 0.83;
         const speed = quiet ? 1 : 0.13;
         const mix = THREE.MathUtils.lerp;
         plane.position.x = mix(plane.position.x, x, speed);
         plane.position.y = mix(plane.position.y, y, speed);
         plane.position.z = mix(plane.position.z, focus ? 0.126 : side ? 0.060 : p.depth, speed);
-        plane.scale.x = mix(plane.scale.x, height * p.ratio, speed);
+        plane.scale.x = mix(plane.scale.x, height * figureRatios[i], speed);
         plane.scale.y = mix(plane.scale.y, height, speed);
         plane.material.opacity = mix(plane.material.opacity, targetOpacity * (0.3 + 0.7 * reveal), speed);
         plane.renderOrder = focus || (selected === null && i === 0) ? 11 : 10;

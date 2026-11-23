@@ -1,4 +1,4 @@
-import recordings from "./voice-data.js";
+import recordings from "./voice-data.js?v=2";
 
 export const voices = Object.freeze({
   bian: Object.freeze(recordings.bian),
@@ -22,48 +22,6 @@ export function playOpening() {
   openingPlayer = new Audio(new URL("./assets/audio/opening.wav", import.meta.url));
   openingPlayer.volume = 0.7;
   return openingPlayer.play().then(() => true, () => false);
-}
-
-function playSpeechFallback(id, script, callbacks, playback) {
-  const synth = globalThis.speechSynthesis;
-  if (!synth || typeof SpeechSynthesisUtterance !== "function") return false;
-
-  const mandarin = synth.getVoices().find(
-    (voice) => /^(zh(-Hans)?(-(CN|SG))?|cmn(-.*)?)$/i.test(voice.lang),
-  );
-  const parts = [script.line, script.note];
-  let step = 0;
-  let utterance = null;
-  playback.stop = () => synth.cancel();
-
-  const next = () => {
-    if (activePlayback !== playback) return;
-    if (step === parts.length) {
-      activePlayback = null;
-      callbacks.onEnd?.();
-      return;
-    }
-    const current = step;
-    utterance = new SpeechSynthesisUtterance(parts[step++]);
-    utterance.lang = "zh-CN";
-    if (mandarin) utterance.voice = mandarin;
-    utterance.rate = 0.94;
-    utterance.pitch = id === "zhang" ? 1.08 : 0.91;
-    utterance.onstart = () => {
-      if (activePlayback !== playback) return;
-      if (current === 0) callbacks.onStart?.();
-      callbacks.onCue?.(utterance.text, current === 0 ? "line" : "note");
-    };
-    utterance.onend = next;
-    utterance.onerror = (error) => {
-      if (activePlayback !== playback) return;
-      activePlayback = null;
-      callbacks.onError?.(error);
-    };
-    synth.speak(utterance);
-  };
-  next();
-  return true;
 }
 
 export async function playRole(id, callbacks = {}) {
@@ -113,7 +71,6 @@ export async function playRole(id, callbacks = {}) {
     }
   }
 
-  if (playSpeechFallback(id, script, callbacks, playback)) return true;
   activePlayback = null;
   callbacks.onError?.(new Error("当前浏览器无法播放普通话导赏。"));
   return false;
