@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#230f13">
+  <meta name="description" content="扫一扫《贬官记》冰箱贴，边一笑、崔云龙和张岫玉在掌中登场。">
+  <title>一贴开戏｜闽剧《贬官记》</title>
+  <link rel="stylesheet" href="./stage.css">
+</head>
+<body>
+  <header class="mast"><a class="brand" href="./"><span class="seal" aria-hidden="true">闽</span>一贴开戏</a><a href="#cast" class="mast-link">认识人物</a></header>
+  <main>
+    <section class="hero" aria-labelledby="title">
+      <div class="hero-copy">
+        <p class="edition"><i></i>闽剧《贬官记》 · 冰箱贴 AR</p>
+        <h1 id="title">掌中<span>开戏</span></h1>
+        <p class="tagline">对准冰箱贴，<br>请戏中人登台。</p>
+        <p class="scan-intro">开启网页相机，将《贬官记》冰箱贴的完整正面对准取景框。</p>
+        <div class="hero-buttons">
+          <button type="button" class="button primary" id="start-scan" aria-describedby="camera-hint">开启相机 · 扫冰箱贴</button>
+        </div>
+        <p class="hint" id="camera-hint"></p>
+      </div>
+      <figure class="target">
+        <div class="target-light"></div>
+        <img src="assets/magnet.webp" alt="《贬官记》三人物冰箱贴，左为崔云龙，中为边一笑，右为张岫玉" width="1254" height="1254">
+        <figcaption>识别图案示例 <span>冰箱贴正面</span></figcaption>
+      </figure>
+    </section>
+    <section class="cast" id="cast" aria-labelledby="cast-title">
+      <div class="section-top"><p class="edition"><i></i>戏中人</p><h2 id="cast-title">三角登场</h2></div>
+      <div class="portraits">
+        <button type="button" class="portrait" data-role="cui" aria-pressed="false"><img src="assets/cui.webp" alt="" loading="lazy"><span>崔云龙</span><small>蓝纹冠 · 浅金袍</small></button>
+        <button type="button" class="portrait active" data-role="bian" aria-pressed="true"><img src="assets/bian.webp" alt="" loading="lazy"><span>边一笑</span><small>白鼻妆 · 红官袍</small></button>
+        <button type="button" class="portrait" data-role="zhang" aria-pressed="false"><img src="assets/zhang.webp" alt="" loading="lazy"><span>张岫玉</span><small>蓝头饰 · 白水袖</small></button>
+      </div>
+      <article class="role-copy">
+        <div><h3 id="role-name"></h3><p id="role-note"></p></div>
+        <button type="button" class="button secondary" id="listen" aria-pressed="false">听普通话导赏</button>
+      </article>
+      <p id="role-subtitle" class="caption" aria-live="polite"></p>
+    </section>
+  </main>
+  <footer>《贬官记》冰箱贴互动体验 <span>相机画面在本机处理</span></footer>
+  <dialog id="scan" aria-labelledby="scan-title">
+    <div id="ar-camera" aria-hidden="true"></div>
+    <div class="lens"></div>
+    <header class="scan-head"><h2 id="scan-title">扫描冰箱贴 <small>AR</small></h2><button type="button" id="leave" class="button glass">关闭相机</button></header>
+    <div class="reticle" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+    <div class="scan-controls">
+      <p id="scan-state" role="status">准备开启相机</p>
+      <p id="scan-help" class="scan-subtitle" hidden></p>
+      <p id="scan-subtitle" class="scan-subtitle" aria-live="polite"></p>
+      <div id="scan-cast" class="scan-cast" hidden>
+        <button type="button" data-index="1" data-speaker="cui">崔云龙</button>
+        <button type="button" data-index="0" data-speaker="bian">边一笑</button>
+        <button type="button" data-index="2" data-speaker="zhang">张岫玉</button>
+        <button type="button" data-index="">合影</button>
+      </div>
+      <div id="scan-recovery" class="scan-recovery" hidden>
+        <button type="button" id="retry-scan" class="button primary">重新开启相机</button>
+        <button type="button" id="use-gallery" class="button glass">看角色导赏</button>
+      </div>
+    </div>
+  </dialog>
+  <script type="module" src="./stage.js"></script>
+</body>
+</html>
