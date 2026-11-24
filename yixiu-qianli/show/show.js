@@ -63,13 +63,19 @@ let page = -1;
 let input = 'idle';
 let cameraStop = null;
 let cameraStart = null;
+let gestureFeedbackTimer = 0;
+let cameraHint = '';
 let restartTimer = null;
 let transitionLock = 0;
-let soundOn = false;
+let soundOn = true;
 let lastHand = 0;
 let motionMode = false;
 let tuned = false;
 let audioContext = null;
+let music = null;
+const scoreBuffers = new Map();
+let roleDucking = false;
+let rolePlaybackId = 0;
 let challenge = null;
 let challengeTimer = 0;
 let riverFrame = 0;
@@ -116,7 +122,7 @@ function paintPage() {
     title('一袖', '千里');
     tagline.replaceChildren('手一抬，戏开场。', document.createElement('br'), '挥一袖，走一程。');
     instruction.textContent = input === 'camera'
-      ? motionMode ? '缓慢挥手，掀开戏幕。' : '举起一只手掌，停一拍，掀开戏幕。'
+      ? motionMode ? '在镜头里向左或向右挥一下，掀开戏幕。' : '举掌停一下，或左右挥一下，掀开戏幕。'
       : '击拍渡江、记谱翻雪山、读线索走草地。三幕都可重练。';
     camera.textContent = input === 'loading' ? '正在开启' : input === 'camera' ? '手势已开启' : '开启手势';
     next.textContent = touchFirst.matches ? '点击开场' : '键鼠体验';
@@ -137,7 +143,7 @@ function paintPage() {
     : input === 'loading' ? '正在连接摄像头' : input === 'keyboard'
       ? touchFirst.matches ? '触屏模式' : '键鼠模式' : '等待开场';
   if (input === 'camera' && cameraBox.classList.contains('is-ready')) {
-    cameraLabel.textContent = page === -1 && !motionMode ? '举起手掌' : '左右挥手';
+    setCameraHint(page === -1 && !motionMode ? '举掌或挥手' : '左右挥手');
   }
   if (chapter) renderChallenge();
 }
@@ -281,6 +287,7 @@ function beginChallenge() {
 
 function renderChallenge() {
   if (challenge?.scene !== page) return;
+  syncMusic();
   const {scene, state, round, selection, stock} = challenge;
   const completed = state === 'complete';
   const progress = completed ? 3 : Math.min(round + 1, 3);
@@ -455,7 +462,84 @@ function unlockSound() {
       try { audioContext = new Context(); } catch { return; }
     }
   }
-  if (audioContext?.state !== 'running') audioContext?.resume().catch(() => {});
+  if (audioContext?.state === 'running') syncMusic();
+  else audioContext?.resume().then(syncMusic).catch(() => {});
+}
+
+const stageScores = [
+  { bpm: 96, root: 50, notes: [0, 7, 9, 7, 3, 5, 3, 0], drum: .83 },
+  { bpm: 92, root: 45, notes: [0, 3, 5, 7, 5, 3, 7, 10], drum: 1 },
+  { bpm: 76, root: 50, notes: [7, 12, 15, 14, 12, 7, 5, 3], drum: .48 },
+  { bpm: 88, root: 48, notes: [0, 4, 7, 9, 7, 4, 2, 7], drum: .69 },
+  { bpm: 82, root: 48, notes: [0, 4, 7, 12, 9, 7, 4, 0], drum: .53 },
+];
+
+function makeScoreBuffer({ bpm, root, notes, drum }) {
+  const rate = 22050;
+  const beat = 60 / bpm;
+  const buffer = audioContext.createBuffer(1, Math.round(rate * beat * 16), rate);
+  const track = buffer.getChannelData(0);
+  const tau = 2 * Math.PI;
+  const hz = note => 440 * 2 ** ((note - 69) / 12);
+
+  function add(at, duration, envelope, voice) {
+    const start = Math.round(at * beat * rate);
+    for (let i = 0; i < Math.round(duration * rate); i++) {
+      const t = i / rate;
+      track[(start + i) % track.length] += envelope(t) * voice(t);
+    }
+  }
+
+  for (let i = 0; i < 16; i++) {
+    const drumLevel = i % 4 === 0 ? .34 : i % 2 === 0 ? .2 : .09;
+    add(i, .26, t => drum * drumLevel * Math.exp(-t * 24) * Math.min(t / .004, 1),
+      t => Math.sin(tau * (94 * t + 1.45 * (1 - Math.exp(-t * 29)))) + .24 * Math.sin(tau * 212 * t));
+    if (i % 4 !== 2) {
+      add(i + .55, .07, t => .095 * drum * Math.exp(-t * 85) * Math.min(t / .002, 1),
+        t => Math.sin(tau * 694 * t) + .4 * Math.sin(tau * 1323 * t));
+    }
+    if (i % 2 === 0) {
+      const frequency = hz(root + 12 + notes[i / 2]);
+      add(i + .18, 1.1, t => .28 * Math.exp(-t * 5.1) * Math.min(t / .009, 1),
+        t => Math.sin(tau * frequency * t) + .32 * Math.sin(tau * frequency * 2.003 * t) * Math.exp(-t * 8));
+    }
+    if (i % 4 === 0) {
+      const frequency = hz(root + (i === 8 ? 7 : 0));
+      const length = beat * 3.7;
+      add(i, length, t => .155 * Math.sin(Math.PI * t / length) ** 2,
+        t => Math.sin(tau * frequency * t) + .27 * Math.sin(tau * frequency * 2.005 * t));
+    }
+  }
+  return buffer;
+}
+
+function syncMusic() {
+  if (audioContext?.state !== 'running') return;
+  const now = audioContext.currentTime;
+  const active = soundOn && !document.hidden;
+  if (!active) {
+    music?.gain.gain.setTargetAtTime(0, now, .04);
+    return;
+  }
+  const index = page + 1;
+  if (music?.index !== index) {
+    if (music) {
+      music.gain.gain.setTargetAtTime(0, now, .16);
+      music.source.stop(now + .85);
+    }
+    const source = audioContext.createBufferSource();
+    const gain = audioContext.createGain();
+    if (!scoreBuffers.has(index)) scoreBuffers.set(index, makeScoreBuffer(stageScores[index]));
+    source.buffer = scoreBuffers.get(index);
+    source.loop = true;
+    gain.gain.value = 0;
+    source.connect(gain).connect(audioContext.destination);
+    source.onended = () => { source.disconnect(); gain.disconnect(); };
+    source.start(now);
+    music = { index, source, gain };
+  }
+  const listening = challenge?.scene === 1 && challenge.state === 'demo';
+  music.gain.gain.setTargetAtTime(listening ? .028 : roleDucking ? .12 : .40, now, .12);
 }
 
 function gong(pitch = 1) {
@@ -475,12 +559,42 @@ function gong(pitch = 1) {
   });
 }
 
+function stopStageVoice() {
+  rolePlaybackId += 1;
+  roleDucking = false;
+  stopRole();
+}
+
 function playCurrentRole() {
   if (!soundOn || !scenes[page]) return;
-  const active = page;
-  playRole(scenes[page].role, { onError() {
-    if (active === page) stageStatus('旁白暂无法播放，字幕仍可阅读。');
-  } }).catch(() => {});
+  const id = ++rolePlaybackId;
+  const restore = () => {
+    if (id !== rolePlaybackId) return;
+    roleDucking = false;
+    syncMusic();
+  };
+  roleDucking = true;
+  syncMusic();
+  playRole(scenes[page].role, { onEnd: restore, onError: restore }).then(played => {
+    if (!played) restore();
+  }, restore);
+}
+
+function setCameraHint(message) {
+  cameraHint = message;
+  if (!gestureFeedbackTimer) cameraLabel.textContent = message;
+}
+
+function flashGesture(direction) {
+  clearTimeout(gestureFeedbackTimer);
+  cameraBox.dataset.swipe = direction;
+  cameraLabel.textContent = direction === 'left' ? '← 左挥已识别' : '右挥已识别 →';
+  burst(direction);
+  gestureFeedbackTimer = setTimeout(() => {
+    gestureFeedbackTimer = 0;
+    delete cameraBox.dataset.swipe;
+    cameraLabel.textContent = cameraHint;
+  }, 620);
 }
 
 function clearCamera() {
@@ -490,6 +604,9 @@ function clearCamera() {
   cameraStop = null;
   cameraBox.hidden = true;
   cameraBox.classList.remove('is-ready');
+  clearTimeout(gestureFeedbackTimer);
+  gestureFeedbackTimer = 0;
+  delete cameraBox.dataset.swipe;
   motionMode = false;
 }
 
@@ -501,7 +618,7 @@ function startOver() {
   next.disabled = false;
   scores = [0, 0, 0];
   finalScore = null;
-  stopRole();
+  stopStageVoice();
   clearCamera();
   input = 'idle';
   page = -1;
@@ -511,6 +628,7 @@ function startOver() {
   transitionLock = 0;
   stageStatus();
   paintPage();
+  syncMusic();
   requestDrawing();
 }
 
@@ -524,9 +642,9 @@ function advance(from, direction = 'right') {
     if (input === 'loading') clearCamera();
     if (input !== 'camera') input = 'keyboard';
   }
-  transitionLock = performance.now() + (page === -1 ? 850 : 680);
+  transitionLock = performance.now() + 300;
   stageStatus();
-  stopRole();
+  stopStageVoice();
   const opening = page < 0;
   page += 1;
   if (!opening) stopChallengeMotion();
@@ -538,6 +656,7 @@ function advance(from, direction = 'right') {
     setTimeout(() => stage.classList.remove('is-opening'), 900);
   }
   paintPage();
+  syncMusic();
   burst(direction);
   gong(opening ? .87 : page === scenes.length ? 1.4 : 1 + page * .08);
   if (page === scenes.length) {
@@ -553,8 +672,8 @@ function advance(from, direction = 'right') {
 const cameraMessages = {
   'loading-model': '正在载入手势识别。',
   'requesting-camera': '请允许浏览器使用摄像头。',
-  'ready': '退到离镜头约一臂的位置，让手完整入镜。',
-  'motion-fallback': '手势模型未加载，已切换为移动感应。',
+  'ready': '一臂远，让手入镜。向左或向右短挥即可。',
+  'motion-fallback': '已切换移动感应。手留在镜头内，向一侧挥动。',
 };
 
 async function beginCamera() {
@@ -572,13 +691,14 @@ async function beginCamera() {
   stageStatus(cameraMessages['requesting-camera']);
   paintPage();
   try {
-    const { startHands } = await import('./hands.js');
+    const { startHands } = await import('./hands.js?v=3');
     if (session.signal.aborted) return;
     const stop = await startHands(visitor, {
       signal: session.signal,
       onGesture(event) {
         if (cameraStart !== session || input !== 'camera') return;
-        if (page === -1 && (event.type === 'palm' || event.type === 'motion-start' || (motionMode && event.type === 'swipe'))) {
+        if (event.type === 'swipe' && event.direction) flashGesture(event.direction);
+        if (page === -1 && ['palm', 'motion-start', 'swipe'].includes(event.type)) {
           advance('gesture', event.direction);
         } else if (page >= 0 && event.type === 'swipe' && event.direction) {
           makeAction(event.direction, 'gesture');
@@ -592,8 +712,8 @@ async function beginCamera() {
           cameraBox.classList.add('is-ready');
           paintPage();
         }
-        if (state === 'hand-found') cameraLabel.textContent = page === -1 && !motionMode ? '手掌已入镜' : '可左右挥动';
-        if (state === 'hand-lost') cameraLabel.textContent = '让手完整入镜';
+        if (state === 'hand-found') setCameraHint(page === -1 && !motionMode ? '手掌已入镜' : '可左右挥动');
+        if (state === 'hand-lost') setCameraHint('让手完整入镜');
         if (cameraMessages[state]) stageStatus(cameraMessages[state]);
       },
       onPosition(position) {
@@ -836,7 +956,8 @@ sound.addEventListener('click', () => {
     unlockSound();
     gong();
     playCurrentRole();
-  } else stopRole();
+  } else stopStageVoice();
+  syncMusic();
 });
 
 document.addEventListener('keydown', (event) => {
@@ -858,9 +979,12 @@ document.addEventListener('keydown', (event) => {
 });
 window.addEventListener('pagehide', () => {
   clearCamera();
-  stopRole();
+  stopStageVoice();
   stopChallengeMotion();
+  music?.source.stop();
+  music = null;
 });
+document.addEventListener('visibilitychange', syncMusic);
 window.addEventListener('pageshow', (event) => {
   if (event.persisted) startOver();
 });

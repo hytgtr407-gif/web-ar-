@@ -101,7 +101,7 @@ function extractHand(result, aspect) {
   const wrist = hand[0];
   const palm = hand[9];
   const size = distance(wrist, palm, aspect);
-  if (size < 0.045) return null;
+  if (size < 0.032) return null;
   const extended = FINGERS.filter(([mcp, pip, dip, tip]) => {
     const span = distance(hand[mcp], hand[tip], aspect);
     const arc = distance(hand[mcp], hand[pip], aspect) +
@@ -113,7 +113,7 @@ function extractHand(result, aspect) {
   return {
     x: 1 - (wrist.x + hand[5].x + palm.x + hand[17].x) / 4,
     y: (wrist.y + hand[5].y + palm.y + hand[17].y) / 4,
-    open: extended === 4 && unpinched,
+    open: extended >= 3 && unpinched,
     size,
   };
 }
@@ -178,10 +178,11 @@ function makeInterpreter({ onGesture, onStatus, onPosition }) {
   let lastMotionStart = -Infinity;
   let visible = false;
   let filtered = null;
+  let heldDirection = 0;
 
   return (position, now, motionMode) => {
     if (!position) {
-      if (now - lastSeen < 240) return;
+      if (now - lastSeen < 175) return;
       if (visible) {
         visible = false;
         if (!motionMode) onStatus?.("hand-lost");
@@ -192,14 +193,21 @@ function makeInterpreter({ onGesture, onStatus, onPosition }) {
       palmSince = 0;
       palmSent = false;
       releaseSince = 0;
+      heldDirection = 0;
       return;
+    }
+    // A hand returning after an occlusion must establish a new trajectory.
+    if (now - lastSeen > 155) {
+      samples = [];
+      filtered = null;
+      palmSince = 0;
     }
     lastSeen = now;
     if (!visible) {
       visible = true;
       if (!motionMode) onStatus?.("hand-found");
     }
-    const blend = motionMode ? 0.45 : 0.67;
+    const blend = motionMode ? 0.65 : 0.83;
     filtered = filtered ? {
       ...position,
       x: filtered.x + (position.x - filtered.x) * blend,
@@ -207,13 +215,15 @@ function makeInterpreter({ onGesture, onStatus, onPosition }) {
     } : position;
     onPosition?.(filtered);
     samples.push({ ...filtered, time: now });
-    samples = samples.filter((sample) => now - sample.time <= (motionMode ? 820 : 600));
+    const windowMs = motionMode ? 620 : 465;
+    while (now - samples[0].time > windowMs) samples.shift();
     const earliest = samples[0];
     const dx = filtered.x - earliest.x;
     const dy = filtered.y - earliest.y;
     const elapsed = now - earliest.time;
 
-    if (motionMode && elapsed >= 220 && Math.abs(dx) >= 0.14 && now - lastMotionStart > 1100) {
+    if (motionMode && elapsed >= 125 && Math.abs(dx) >= 0.105 &&
+        Math.abs(dx) > Math.abs(dy) * 1.25 && now - lastMotionStart > 1000) {
       lastMotionStart = now;
       onGesture?.({ type: "motion-start" });
     }
@@ -222,7 +232,7 @@ function makeInterpreter({ onGesture, onStatus, onPosition }) {
       releaseSince = 0;
       if (!palmSince) palmSince = now;
       // Holding, rather than crossing the frame, opens the first curtain.
-      if (!palmSent && now - palmSince >= 420 && Math.abs(dx) < 0.13 && Math.abs(dy) < 0.18) {
+      if (!palmSent && now - palmSince >= 300 && Math.abs(dx) < 0.105 && Math.abs(dy) < 0.15) {
         palmSent = true;
         onGesture?.({ type: "palm" });
       }
@@ -234,13 +244,31 @@ function makeInterpreter({ onGesture, onStatus, onPosition }) {
       }
     }
 
-    const limit = motionMode ? 0.23 : Math.max(0.15, filtered.size * 0.9);
-    const fingersOpen = motionMode || samples.filter((sample) => sample.open).length >= 2;
-    if (fingersOpen && elapsed >= 140 && now - lastSwipe > 850 &&
-        Math.abs(dx) >= limit && Math.abs(dx) > Math.abs(dy) * 1.55) {
+    const rest = samples.filter(sample => now - sample.time <= 170);
+    if (rest.length >= 3 && now - rest[0].time >= 105) {
+      const recentX = rest.map(sample => sample.x);
+      if (Math.max(...recentX) - Math.min(...recentX) < .023) heldDirection = 0;
+    }
+    if (now - lastSwipe < (motionMode ? 340 : 245)) return;
+
+    const limit = motionMode ? .15 : Math.min(.13, Math.max(.078, filtered.size * .47));
+    let travelled = 0;
+    for (let i = samples.length - 2; i >= 0; i--) {
+      const anchor = samples[i];
+      travelled += Math.abs(samples[i + 1].x - anchor.x);
+      const horizontal = filtered.x - anchor.x;
+      const distance = Math.abs(horizontal);
+      const age = now - anchor.time;
+      const sign = Math.sign(horizontal);
+      if (i === samples.length - 2 && distance < limit * 1.4) continue;
+      if (age < (motionMode ? 95 : 48) || distance < limit || sign === heldDirection ||
+          distance < age * (motionMode ? .00022 : .00025) || distance < travelled * .72 ||
+          distance < Math.abs(filtered.y - anchor.y) * 1.26) continue;
       lastSwipe = now;
+      heldDirection = sign;
       samples = [{ ...filtered, time: now }];
-      onGesture?.({ type: "swipe", direction: dx > 0 ? "right" : "left" });
+      onGesture?.({ type: "swipe", direction: sign > 0 ? "right" : "left" });
+      break;
     }
   };
 }
@@ -276,7 +304,7 @@ export async function startHands(video, options = {}) {
     onStatus?.("requesting-camera");
     stream = await waitFor(navigator.mediaDevices.getUserMedia({
       audio: false,
-      video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 24 } },
+      video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30 } },
     }), {
       signal: init.signal,
       ms: 25000,
@@ -313,7 +341,7 @@ export async function startHands(video, options = {}) {
   function tick(now) {
     if (stopped) return;
     frame = requestAnimationFrame(tick);
-    if (video.readyState < 2 || video.currentTime === lastTime || now - lastFrameAt < (detector ? 52 : 72)) return;
+    if (video.readyState < 2 || video.currentTime === lastTime || now - lastFrameAt < (detector ? 29 : 46)) return;
     lastTime = video.currentTime;
     lastFrameAt = now;
     let position;
