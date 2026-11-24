@@ -31,7 +31,7 @@ function playSpeechFallback(id, script, callbacks, playback) {
   const mandarin = synth.getVoices().find(
     (voice) => /^(zh(-Hans)?(-(CN|SG))?|cmn(-.*)?)$/i.test(voice.lang),
   );
-  const parts = [script.line, script.note];
+  const parts = callbacks.lineOnly ? [script.line] : [script.line, script.note];
   let step = 0;
   let utterance = null;
   playback.stop = () => synth.cancel();
@@ -76,9 +76,16 @@ export async function playRole(id, callbacks = {}) {
 
   if (typeof Audio === "function") {
     const player = new Audio(new URL(script.audio, import.meta.url));
+    if (callbacks.lineOnly) player.volume = .8;
     let shownCue = "";
     const showCue = () => {
       if (activePlayback !== playback) return;
+      if (callbacks.lineOnly && player.currentTime >= script.cue) {
+        activePlayback = null;
+        playback.stop();
+        callbacks.onEnd?.();
+        return;
+      }
       const cue = player.currentTime >= script.cue ? "note" : "line";
       if (cue === shownCue) return;
       shownCue = cue;

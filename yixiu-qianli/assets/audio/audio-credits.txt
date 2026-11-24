@@ -1,0 +1,14 @@
+《一袖千里》音频来源
+
+场景背景音乐为本游戏编配，使用真实乐器采样。
+采样库为 VS Chamber Orchestra: Community Edition，录音为 Sam Gossner 与 Simon Dalzell。采样剪辑为 Elan Hickler / Soundemote。
+原始采样以 CC0 1.0 公共领域贡献许可发布。本项目对采样做了剪辑、淡入淡出、音高调整和混音。
+https://github.com/sgossner/VSCO-2-CE
+https://creativecommons.org/publicdomain/zero/1.0/
+
+Harp: KSHarp_B5_mf.wav, KSHarp_A6_mf.wav
+Log drum: LogDrumLo_MedM_v1_rr1_Sum.wav
+Claves: claves_mp.wav
+Gong: gong_smack_light1.wav
+
+角色登场句使用项目已有的普通话合成配音。

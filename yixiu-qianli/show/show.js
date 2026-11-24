@@ -1,4 +1,4 @@
-import { playRole, stopRole } from '../audio.js';
+import { playRole, stopRole } from '../audio.js?v=4';
 
 const select = (id) => document.getElementById(id);
 const stage = select('stage');
@@ -74,6 +74,10 @@ let tuned = false;
 let audioContext = null;
 let music = null;
 const scoreBuffers = new Map();
+const kitUrl = new URL('../assets/audio/stage-samples.wav?v=4', import.meta.url).href;
+const kitDownload = fetch(kitUrl).then(async response => response.ok ? response.arrayBuffer() : null).catch(() => null);
+let kitPending = false;
+let samples = null;
 let roleDucking = false;
 let rolePlaybackId = 0;
 let challenge = null;
@@ -467,49 +471,62 @@ function unlockSound() {
 }
 
 const stageScores = [
-  { bpm: 96, root: 50, notes: [0, 7, 9, 7, 3, 5, 3, 0], drum: .83 },
-  { bpm: 92, root: 45, notes: [0, 3, 5, 7, 5, 3, 7, 10], drum: 1 },
-  { bpm: 76, root: 50, notes: [7, 12, 15, 14, 12, 7, 5, 3], drum: .48 },
-  { bpm: 88, root: 48, notes: [0, 4, 7, 9, 7, 4, 2, 7], drum: .69 },
-  { bpm: 82, root: 48, notes: [0, 4, 7, 12, 9, 7, 4, 0], drum: .53 },
+  { bpm: 86, root: 62, notes: [[.10,0,.80],[1.35,7,.48],[2.87,9,.61],[4.38,7,.61],[6.53,4,.50],[8.02,2,.76],[9.54,4,.57],[11.09,0,.78],[13.28,7,.42],[14.51,2,.40]], drums: [0, 4.07, 8, 11.1], clicks: [3.67, 10.72] },
+  { bpm: 102, root: 62, notes: [[.09,0,.85],[1.49,7,.58],[2.24,9,.75],[3.44,7,.51],[4.08,4,.76],[6.62,0,.65],[7.42,2,.55],[8.08,7,.80],[9.55,9,.55],[10.2,12,.70],[11.5,9,.44],[12.06,7,.65],[13.97,4,.56],[14.82,2,.51]], drums: [0, 2.62, 4.02, 7.36, 8, 10.58, 12.04, 15], clicks: [1.58, 3.41, 5.60, 9.55, 11.14, 13.70] },
+  { bpm: 72, root: 62, notes: [[.13,7,.63],[2.33,9,.51],[3.91,12,.70],[5.64,9,.43],[7.67,7,.60],[9.54,4,.47],[11.27,2,.45],[13.05,0,.65]], drums: [0, 8.02], clicks: [] },
+  { bpm: 82, root: 60, notes: [[.09,0,.69],[.90,4,.41],[2.22,7,.60],[4.11,9,.73],[5.33,7,.46],[6.63,4,.56],[8.00,2,.70],[9.11,4,.44],[10.95,7,.61],[12.17,4,.57],[13.59,2,.51],[15,0,.63]], drums: [0, 4, 8.03, 12, 14.02], clicks: [2.76, 6.40, 11.54, 14.67] },
+  { bpm: 78, root: 62, notes: [[.12,0,.70],[1.86,4,.48],[3.38,7,.61],[4.67,9,.66],[6.08,12,.56],[8.12,9,.54],[9.73,7,.52],[11.14,4,.61],[13.02,2,.54],[14.37,0,.65]], drums: [0, 8.02, 12.45], clicks: [7.62] },
 ];
 
-function makeScoreBuffer({ bpm, root, notes, drum }) {
-  const rate = 22050;
+async function loadSamples() {
+  if (kitPending) return;
+  kitPending = true;
+  const bytes = await kitDownload;
+  if (!bytes) return;
+  try {
+    const kit = await audioContext.decodeAudioData(bytes);
+    const offsets = [0, 1.65, 3.20, 3.94, 4.33, 6.18].map(time => Math.round(time * kit.sampleRate));
+    const names = ['harpLow', 'harpHigh', 'drum', 'claves', 'gong'];
+    if (kit.length < offsets.at(-1) - 1) return;
+    const pcm = kit.getChannelData(0);
+    samples = Object.fromEntries(names.map((name, index) => {
+      const take = audioContext.createBuffer(1, offsets[index + 1] - offsets[index], kit.sampleRate);
+      take.copyToChannel(pcm.subarray(offsets[index], offsets[index + 1]), 0);
+      return [name, take];
+    }));
+    syncMusic();
+  } catch {
+    // Keep the visual rhythm cues and voice playback available if the kit cannot load.
+  }
+}
+
+function makeScoreBuffer({ bpm, root, notes, drums, clicks }) {
+  const rate = samples.harpLow.sampleRate;
   const beat = 60 / bpm;
   const buffer = audioContext.createBuffer(1, Math.round(rate * beat * 16), rate);
   const track = buffer.getChannelData(0);
-  const tau = 2 * Math.PI;
-  const hz = note => 440 * 2 ** ((note - 69) / 12);
-
-  function add(at, duration, envelope, voice) {
+  function mix(take, at, gain, speed = 1) {
     const start = Math.round(at * beat * rate);
-    for (let i = 0; i < Math.round(duration * rate); i++) {
-      const t = i / rate;
-      track[(start + i) % track.length] += envelope(t) * voice(t);
+    const data = take.getChannelData(0);
+    for (let i = 0, atSample = 0; atSample < data.length - 1; i++, atSample += speed) {
+      const index = Math.floor(atSample);
+      const value = data[index] + (data[index + 1] - data[index]) * (atSample - index);
+      track[(start + i) % track.length] += value * gain;
     }
   }
 
-  for (let i = 0; i < 16; i++) {
-    const drumLevel = i % 4 === 0 ? .34 : i % 2 === 0 ? .2 : .09;
-    add(i, .26, t => drum * drumLevel * Math.exp(-t * 24) * Math.min(t / .004, 1),
-      t => Math.sin(tau * (94 * t + 1.45 * (1 - Math.exp(-t * 29)))) + .24 * Math.sin(tau * 212 * t));
-    if (i % 4 !== 2) {
-      add(i + .55, .07, t => .095 * drum * Math.exp(-t * 85) * Math.min(t / .002, 1),
-        t => Math.sin(tau * 694 * t) + .4 * Math.sin(tau * 1323 * t));
-    }
-    if (i % 2 === 0) {
-      const frequency = hz(root + 12 + notes[i / 2]);
-      add(i + .18, 1.1, t => .28 * Math.exp(-t * 5.1) * Math.min(t / .009, 1),
-        t => Math.sin(tau * frequency * t) + .32 * Math.sin(tau * frequency * 2.003 * t) * Math.exp(-t * 8));
-    }
-    if (i % 4 === 0) {
-      const frequency = hz(root + (i === 8 ? 7 : 0));
-      const length = beat * 3.7;
-      add(i, length, t => .155 * Math.sin(Math.PI * t / length) ** 2,
-        t => Math.sin(tau * frequency * t) + .27 * Math.sin(tau * frequency * 2.005 * t));
-    }
+  for (const [at, interval, gain] of notes) {
+    const note = root + interval;
+    const high = note >= 74;
+    const take = high ? samples.harpHigh : samples.harpLow;
+    const speed = 2 ** ((note - (high ? 93 : 83)) / 12);
+    mix(take, at, gain, speed);
+    mix(take, at + .41, gain * .12, speed);
   }
+  for (const [i, at] of drums.entries()) {
+    mix(samples.drum, at, i % 3 === 0 ? .47 : .26, i % 2 === 0 ? .89 : .95);
+  }
+  for (const [i, at] of clicks.entries()) mix(samples.claves, at, i % 2 === 0 ? .18 : .12, i % 2 === 0 ? 1 : 1.1);
   return buffer;
 }
 
@@ -519,6 +536,10 @@ function syncMusic() {
   const active = soundOn && !document.hidden;
   if (!active) {
     music?.gain.gain.setTargetAtTime(0, now, .04);
+    return;
+  }
+  if (!samples) {
+    void loadSamples();
     return;
   }
   const index = page + 1;
@@ -539,24 +560,19 @@ function syncMusic() {
     music = { index, source, gain };
   }
   const listening = challenge?.scene === 1 && challenge.state === 'demo';
-  music.gain.gain.setTargetAtTime(listening ? .028 : roleDucking ? .12 : .40, now, .12);
+  music.gain.gain.setTargetAtTime(listening ? .018 : roleDucking ? .22 : .56, now, .12);
 }
 
 function gong(pitch = 1) {
-  if (!soundOn || !audioContext || audioContext.state !== 'running') return;
-  const now = audioContext.currentTime;
-  [113, 187.5, 284, 409.7, 527].forEach((frequency, index) => {
-    const osc = audioContext.createOscillator();
-    const amp = audioContext.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(frequency * pitch, now);
-    amp.gain.setValueAtTime(0.0001, now);
-    amp.gain.exponentialRampToValueAtTime((index === 0 ? .16 : .055) / (index + 1), now + .014);
-    amp.gain.exponentialRampToValueAtTime(.0001, now + .55 + index * .09);
-    osc.connect(amp).connect(audioContext.destination);
-    osc.start(now);
-    osc.stop(now + 1.08);
-  });
+  if (!soundOn || audioContext?.state !== 'running' || !samples) return;
+  const source = audioContext.createBufferSource();
+  const amp = audioContext.createGain();
+  source.buffer = samples.gong;
+  source.playbackRate.value = .52 + pitch * .64;
+  amp.gain.value = pitch < .95 ? .46 : .38;
+  source.connect(amp).connect(audioContext.destination);
+  source.onended = () => { source.disconnect(); amp.disconnect(); };
+  source.start();
 }
 
 function stopStageVoice() {
@@ -575,7 +591,7 @@ function playCurrentRole() {
   };
   roleDucking = true;
   syncMusic();
-  playRole(scenes[page].role, { onEnd: restore, onError: restore }).then(played => {
+  playRole(scenes[page].role, { lineOnly: true, onEnd: restore, onError: restore }).then(played => {
     if (!played) restore();
   }, restore);
 }
