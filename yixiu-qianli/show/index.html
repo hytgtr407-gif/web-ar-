@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#11100e">
+  <meta name="description" content="闽剧《贬官记》与长征主题的互动戏台。击拍渡江、复奏雪山锣谱、沿线索穿过草地。">
+  <title>一袖千里｜闽剧 × 长征 手势互动展</title>
+  <link rel="stylesheet" href="show.css">
+</head>
+<body>
+  <main class="installation">
+    <header class="topbar">
+      <button class="wordmark" id="brand" type="button" aria-label="一袖千里，回到开场"><span class="stamp" aria-hidden="true">戏</span><span>一袖千里<small>闽剧 × 长征</small></span></button>
+      <nav class="utils" aria-label="展台控制">
+        <button id="sound" class="quiet-button" type="button" aria-pressed="false">开启声音</button>
+        <button id="fullscreen" class="quiet-button" type="button">全屏</button>
+        <button id="reset" class="quiet-button" type="button" hidden>重新开始</button>
+      </nav>
+    </header>
+
+    <section class="stage" id="stage" data-phase="intro" data-look="red" aria-label="一袖千里互动戏台">
+      <div class="stage-atmosphere" aria-hidden="true">
+        <div class="stage-art"></div>
+        <div class="stage-halo"></div>
+        <div class="sun-disc"></div>
+        <svg class="mountains" viewBox="0 0 1000 520" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+          <defs>
+            <linearGradient id="mountain-fill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="currentColor" stop-opacity=".38"/>
+              <stop offset="1" stop-color="currentColor" stop-opacity="0"/>
+            </linearGradient>
+          </defs>
+          <path d="m0 495 92-39 116-154 50-41 62 27 68-79 42 16 41-96 44-20 61 94 28-18 41 26 78 110 77-42 99 59 101 112v70H0z" fill="url(#mountain-fill)"/>
+          <g fill="none" stroke="currentColor" stroke-width="1">
+            <path opacity=".8" d="m0 495 92-39 116-154 50-41 62 27 68-79 42 16 41-96 44-20 61 94 28-18 41 26 78 110 77-42 99 59 101 112"/>
+            <path opacity=".55" d="m0 507 109-35 105-146 46-38 62 19 73-78 45 16 42-95 30-16 58 94 35-18 27 19 77 115 95-37 85 48 112 107"/>
+            <path opacity=".4" d="m44 520 82-37 99-136 45-28 55 15 76-79 45 22 47-99 11-5 62 88 37-15 16 23 82 96 102-34 82 51 94 90"/>
+            <path opacity=".35" d="m0 475 73-52 93-98 52-24 22-44 64 19 86-99h26l38-66 63-33 65 87 23 7 29 5 100 132 72-36 105 73 89 117"/>
+            <path opacity=".4" d="m76 520 116-62 65-98 47-12 58 13 53-56 36 6 47-37 69 62 76 1 77 57 50-15 90 49 85 92"/>
+          </g>
+        </svg>
+        <div class="figure-group">
+          <img class="figure figure-cui" id="figure-cui" src="../assets/cui.webp" alt="">
+          <img class="figure figure-zhang" id="figure-zhang" src="../assets/zhang.webp" alt="">
+          <img class="figure figure-bian" id="figure-bian" src="../assets/bian.webp" alt="">
+        </div>
+        <div class="curtain curtain-left"></div>
+        <div class="curtain curtain-right"></div>
+        <canvas id="ribbon" class="ribbon"></canvas>
+      </div>
+
+      <div class="stage-grid">
+        <div class="stage-copy" id="stage-copy">
+          <div class="eyebrow"><span></span><p id="eyebrow">《贬官记》人物互动展</p></div>
+          <h1 id="headline">一袖<span>千里</span></h1>
+          <p id="tagline" class="tagline">手一抬，戏开场。<br>挥一袖，走一程。</p>
+          <p id="instruction" class="instruction">听拍渡过急流，记住雪山锣谱，再沿线索走出草地。</p>
+          <div class="challenge" id="challenge" hidden>
+            <div class="challenge-header">
+              <strong id="challenge-name"></strong>
+              <span id="challenge-count"></span>
+              <span class="challenge-score" id="challenge-score"></span>
+            </div>
+            <div class="river-board" id="river-board" hidden>
+              <div class="river-meter" aria-hidden="true"><i id="river-window"></i><b id="river-cursor"></b></div>
+              <div class="meter-legend"><span>急流</span><span id="river-cue">等候亮区</span><span>急流</span></div>
+            </div>
+            <div class="snow-board" id="snow-board" hidden>
+              <div class="drum-beats" id="drum-beats" aria-hidden="true"></div>
+              <span class="drum-caption" id="drum-caption"></span>
+            </div>
+            <div class="grass-board" id="grass-board" hidden>
+              <span id="grass-clue"></span>
+              <small id="grass-stock"></small>
+            </div>
+            <div class="choice-buttons" id="choices" hidden>
+              <button type="button" id="choose-left" class="secondary">左</button>
+              <button type="button" id="choose-right" class="secondary">右</button>
+            </div>
+            <p class="feedback" id="feedback" aria-live="polite"></p>
+          </div>
+          <div class="result" id="result" hidden aria-label="本次成绩">
+            <strong id="result-rank"></strong><span id="result-score"></span><span id="result-best"></span>
+            <div id="result-breakdown"></div>
+          </div>
+          <div class="actions">
+            <button class="primary" id="camera" type="button">开启手势</button>
+            <button class="secondary" id="next" type="button">键鼠体验</button>
+            <button class="secondary" id="retry" type="button" hidden>重练本幕</button>
+          </div>
+          <button class="ticket" id="save" type="button" hidden>保存纪念戏票</button>
+          <p id="status" class="status" role="status" aria-live="polite"></p>
+        </div>
+
+        <div class="stage-aside">
+          <div class="mode-chip" id="mode">等待开场</div>
+          <div class="camera-box" id="camera-box" hidden>
+            <video id="visitor" playsinline muted autoplay aria-label="手势摄像头预览"></video>
+            <span id="camera-indicator"></span>
+            <p id="camera-label">举起手掌</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="chapters" aria-label="长征互动路线">
+        <div class="chapter" data-step="0"><i></i><span>急流</span></div>
+        <div class="chapter" data-step="1"><i></i><span>雪山</span></div>
+        <div class="chapter" data-step="2"><i></i><span>草地</span></div>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <span>现场互动演绎 · 摄像头画面仅在本机处理</span>
+      <span class="shortcuts"><kbd>空格</kbd> 击拍 / 确认 <kbd>←</kbd><kbd>→</kbd> 选边 <kbd>F</kbd> 全屏 <kbd>R</kbd> 重来</span>
+    </footer>
+  </main>
+  <script src="show.js" type="module"></script>
+</body>
+</html>
