@@ -1,4 +1,4 @@
-import { playRole, stopRole } from '../audio.js?v=4';
+import { playRole, stopRole } from '../audio.js?v=5';
 
 const select = (id) => document.getElementById(id);
 const stage = select('stage');

@@ -11,4 +11,7 @@ Log drum: LogDrumLo_MedM_v1_rr1_Sum.wav
 Claves: claves_mp.wav
 Gong: gong_smack_light1.wav
 
-角色登场句使用项目已有的普通话合成配音。
+角色登场句使用 Kokoro v1.0 预设普通话声线，经 Kokoro Web 在浏览器本地生成。
+崔云龙：Yunjian。边一笑：Yunxi。张岫玉：Xiaoxiao。
+https://kokoroweb.app/
+https://huggingface.co/hexgrad/Kokoro-82M

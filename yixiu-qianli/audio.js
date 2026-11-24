@@ -7,6 +7,12 @@ export const voices = Object.freeze({
 });
 export const intro = Object.freeze(recordings.intro);
 
+const stageVoices = Object.freeze({
+  cui: { audio: "./assets/audio/cui-stage-v5.wav", line: "锣声一响，且容我……正一正衣冠。" },
+  bian: { audio: "./assets/audio/bian-stage-v5.wav", line: "诸位且坐。嘿！我这一笑啊，里头还有话呢。" },
+  zhang: { audio: "./assets/audio/zhang-stage-v5.wav", line: "等这一袖落下……再同诸位说心里话。" },
+});
+
 let activePlayback = null;
 let openingPlayer = null;
 
@@ -75,21 +81,22 @@ export async function playRole(id, callbacks = {}) {
   activePlayback = playback;
 
   if (typeof Audio === "function") {
-    const player = new Audio(new URL(script.audio, import.meta.url));
+    const stageVoice = callbacks.lineOnly && stageVoices[id];
+    const player = new Audio(new URL(stageVoice?.audio || script.audio, import.meta.url));
     if (callbacks.lineOnly) player.volume = .8;
     let shownCue = "";
     const showCue = () => {
       if (activePlayback !== playback) return;
-      if (callbacks.lineOnly && player.currentTime >= script.cue) {
+      if (!stageVoice && callbacks.lineOnly && player.currentTime >= script.cue) {
         activePlayback = null;
         playback.stop();
         callbacks.onEnd?.();
         return;
       }
-      const cue = player.currentTime >= script.cue ? "note" : "line";
+      const cue = !stageVoice && player.currentTime >= script.cue ? "note" : "line";
       if (cue === shownCue) return;
       shownCue = cue;
-      callbacks.onCue?.(script[cue], cue);
+      callbacks.onCue?.(stageVoice?.line || script[cue], cue);
     };
     playback.stop = () => {
       player.pause();

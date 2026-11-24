@@ -34,7 +34,7 @@ button:focus-visible,a:focus-visible{outline:2px solid #ffc668;outline-offset:4p
 @keyframes disc-pulse{from{filter:brightness(.83)}to{filter:brightness(1.14)}}
 .mountains{position:absolute;bottom:-.8%;right:-7%;width:83%;height:81%;color:var(--terrain);opacity:.56;transition:color .4s;filter:drop-shadow(0 0 24px var(--terrain))}
 .figure-group{position:absolute;top:1%;left:38%;right:0;bottom:9%;z-index:2;pointer-events:none}
-.figure{position:absolute;object-fit:contain;object-position:center bottom;bottom:2%;height:88%;width:64%;filter:drop-shadow(0 12px 24px #11040bb0);transition:transform .75s cubic-bezier(.18,.8,.26,1),opacity .48s,filter .55s;filter:drop-shadow(0 10px 15px #160b10d8);mask-image:linear-gradient(#000 92%,#000e 96%,transparent)}
+.figure{position:absolute;object-fit:contain;object-position:center bottom;bottom:2%;height:88%;width:64%;filter:drop-shadow(0 12px 24px #11040bb0);transition:transform .75s cubic-bezier(.18,.8,.26,1),opacity .48s,filter .55s;filter:drop-shadow(0 10px 15px #160b10d8)}
 .figure-bian{left:19%;z-index:2}
 .figure-zhang{right:-9%;height:71%;opacity:.65;transform:rotate(4deg);filter:drop-shadow(0 9px 22px #160913df) saturate(.75)}
 .figure-cui{left:-8%;height:70%;opacity:.65;transform:rotate(-4deg);filter:drop-shadow(0 9px 22px #160913df) saturate(.69)}
